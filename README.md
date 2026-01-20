@@ -7,42 +7,38 @@
 ## Architecture
 
 ```mermaid
-flowchart TB
-    subgraph Server["Server (Your Main PC)"]
-        API[FastAPI Server<br/>:8000]
-        DB[(SQLite DB)]
-        Dashboard[Web Dashboard]
+flowchart LR
+    subgraph You["Your Browser"]
+        Dashboard[📊 Dashboard]
+    end
+
+    subgraph Server["Server"]
+        API[FastAPI + WebSocket]
+        DB[(SQLite)]
         API <--> DB
-        API --> Dashboard
     end
 
-    subgraph Agents["Monitored Computers"]
-        Agent1[Agent<br/>Windows PC]
-        Agent2[Agent<br/>Linux Server]
-        Agent3[Agent<br/>MacBook]
+    subgraph Computers["Your Computers"]
+        PC1[🖥️ Windows PC<br/>Agent + RustDesk]
+        PC2[🐧 Linux Server<br/>Agent + RustDesk]
+        PC3[🍎 MacBook<br/>Agent + RustDesk]
     end
 
-    subgraph Optional["Optional Services"]
-        InfluxDB[(InfluxDB)]
-        Grafana[Grafana<br/>Historical Graphs]
-        InfluxDB --> Grafana
-    end
+    Dashboard <-->|View Stats<br/>Run Commands<br/>Browse Files| API
 
-    Agent1 <-->|WebSocket<br/>Instant Commands| API
-    Agent2 <-->|WebSocket<br/>Instant Commands| API
-    Agent3 <-->|WebSocket<br/>Instant Commands| API
+    API <-->|WebSocket| PC1
+    API <-->|WebSocket| PC2
+    API <-->|WebSocket| PC3
 
-    Agent1 -->|Heartbeat<br/>System Stats| API
-    Agent2 -->|Heartbeat<br/>System Stats| API
-    Agent3 -->|Heartbeat<br/>System Stats| API
-
-    API -.->|Metrics| InfluxDB
-
-    User((You)) --> Dashboard
-    User -.->|RustDesk| Agent1
-    User -.->|RustDesk| Agent2
-    User -.->|RustDesk| Agent3
+    Dashboard -.->|Click "Remote"<br/>Opens RustDesk| PC1
+    Dashboard -.->|Click "Remote"<br/>Opens RustDesk| PC2
+    Dashboard -.->|Click "Remote"<br/>Opens RustDesk| PC3
 ```
+
+**How it works:**
+1. **Agents** run on each computer, sending stats every 60s via WebSocket
+2. **Dashboard** shows all computers - click any to view details, run commands, browse files
+3. **Remote Desktop** - click "Remote" to instantly connect via RustDesk (peer-to-peer)
 
 ---
 

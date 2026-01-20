@@ -951,6 +951,31 @@ def handle_websocket_command(cmd_type, payload):
             "exit_code": result["exit_code"]
         }
 
+    elif cmd_type == "reload_settings":
+        print(f"[{time.strftime('%H:%M:%S')}] Reloading settings from server...")
+        old_interval = HEARTBEAT_INTERVAL
+        success = sync_settings_from_server()
+        if success:
+            new_interval = HEARTBEAT_INTERVAL
+            if old_interval != new_interval:
+                msg = f"Settings reloaded! Heartbeat changed: {old_interval}s -> {new_interval}s"
+            else:
+                msg = "Settings reloaded (no changes)"
+            print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+            return {
+                "type": "command_result",
+                "command": "reload_settings",
+                "output": msg,
+                "exit_code": 0
+            }
+        else:
+            return {
+                "type": "command_result",
+                "command": "reload_settings",
+                "output": "Failed to reload settings",
+                "exit_code": 1
+            }
+
     return None
 
 

@@ -92,6 +92,8 @@ if not ADMIN_USERS:
 
 AGENT_API_KEY = CONFIG["agent_api_key"]
 HEARTBEAT_INTERVAL = CONFIG.get("heartbeat_interval", 60)  # Default 60 seconds
+print(f"[Server] Heartbeat interval loaded: {HEARTBEAT_INTERVAL} seconds ({HEARTBEAT_INTERVAL/3600:.1f} hours)")
+print(f"[Server] Offline threshold: {max(HEARTBEAT_INTERVAL * 2, 300)} seconds ({max(HEARTBEAT_INTERVAL * 2, 300)/3600:.1f} hours)")
 
 # Optional InfluxDB support
 INFLUXDB_URL = CONFIG.get("influxdb_url", "")  # e.g., "http://localhost:8086"
@@ -526,7 +528,7 @@ def check_offline_computers():
 
     for row in cursor:
         last_seen = datetime.fromisoformat(row["last_seen"])
-        is_offline = datetime.now() - last_seen > timedelta(minutes=2)
+        is_offline = datetime.now() - last_seen > timedelta(seconds=max(HEARTBEAT_INTERVAL * 2, 300))
 
         if is_offline:
             # Check if we already alerted for this
@@ -649,7 +651,7 @@ async def get_computers(username: str = Depends(verify_credentials)):
 
     for row in cursor:
         last_seen = datetime.fromisoformat(row["last_seen"])
-        is_online = datetime.now() - last_seen < timedelta(minutes=2)
+        is_online = datetime.now() - last_seen < timedelta(seconds=max(HEARTBEAT_INTERVAL * 2, 300))
 
         # Get latest speed test for this computer
         speed_test = conn.execute(
@@ -823,7 +825,7 @@ async def get_auto_speedtest_status(username: str = Depends(verify_credentials))
     computers_status = []
     for row in conn.execute("SELECT id, name, last_seen FROM computers"):
         last_seen = datetime.fromisoformat(row["last_seen"])
-        is_online = datetime.now() - last_seen < timedelta(minutes=2)
+        is_online = datetime.now() - last_seen < timedelta(seconds=max(HEARTBEAT_INTERVAL * 2, 300))
 
         # Get last speed test for this computer
         last_test = conn.execute(
@@ -871,7 +873,7 @@ async def run_auto_speedtests(request: Request, username: str = Depends(verify_c
     computers = []
     for row in conn.execute("SELECT id, name, last_seen FROM computers"):
         last_seen = datetime.fromisoformat(row["last_seen"])
-        is_online = datetime.now() - last_seen < timedelta(minutes=2)
+        is_online = datetime.now() - last_seen < timedelta(seconds=max(HEARTBEAT_INTERVAL * 2, 300))
         if is_online:
             computers.append({"id": row["id"], "name": row["name"]})
     conn.close()
@@ -1260,7 +1262,25 @@ async def set_heartbeat_interval(request: Request, username: str = Depends(requi
     with open(CONFIG_FILE, "w") as f:
         json.dump(CONFIG, f, indent=2)
 
-    return {"status": "updated", "heartbeat_interval": HEARTBEAT_INTERVAL}
+    # Broadcast reload_settings to all connected agents so they pick up the change immediately
+    notified_agents = []
+    failed_agents = []
+    for computer_id, ws in list(active_connections.items()):
+        try:
+            await ws.send_json({"command": "reload_settings", "payload": ""})
+            notified_agents.append(computer_id)
+        except Exception as e:
+            failed_agents.append(computer_id)
+            print(f"[Settings] Failed to notify agent {computer_id}: {e}")
+
+    print(f"[Settings] Heartbeat interval changed to {interval}s. Notified {len(notified_agents)} agent(s).")
+
+    return {
+        "status": "updated",
+        "heartbeat_interval": HEARTBEAT_INTERVAL,
+        "agents_notified": len(notified_agents),
+        "agents_failed": len(failed_agents)
+    }
 
 # ============================================
 # Computer rename
@@ -1301,7 +1321,7 @@ async def get_all_locations(username: str = Depends(verify_credentials)):
     locations = []
     for row in cursor:
         last_seen = datetime.fromisoformat(row["last_seen"])
-        is_online = datetime.now() - last_seen < timedelta(minutes=2)
+        is_online = datetime.now() - last_seen < timedelta(seconds=max(HEARTBEAT_INTERVAL * 2, 300))
         locations.append({
             "id": row["id"],
             "name": row["name"],
@@ -1474,7 +1494,7 @@ async def prometheus_metrics():
 
     for row in cursor:
         last_seen = datetime.fromisoformat(row["last_seen"])
-        is_online = 1 if datetime.now() - last_seen < timedelta(minutes=2) else 0
+        is_online = 1 if datetime.now() - last_seen < timedelta(seconds=max(HEARTBEAT_INTERVAL * 2, 300)) else 0
         labels = f'computer="{row["name"]}",id="{row["id"]}"'
 
         lines.append(f'pc_monitor_cpu_percent{{{labels}}} {row["cpu_percent"]}')

@@ -509,7 +509,7 @@
         </div>
     </div>
 
-    <p class="refresh-info">Auto-refreshes every 30 seconds | Login: admin/admin</p>
+    <p class="refresh-info" id="refresh-info-text">Auto-refreshes every 30 seconds</p>
 
     <!-- Details Modal -->
     <div class="modal" id="details-modal">
@@ -1600,6 +1600,10 @@
                         </div>
                     </div>
 
+                    <div style="margin-top: 1.5rem; padding: 1rem; background: var(--primary); border-radius: 8px; text-align: center;">
+                        <button class="btn" style="background: white; color: var(--primary); font-weight: bold; padding: 0.75rem 2rem; font-size: 1rem;" onclick="saveGlobalSettings()">Save Settings</button>
+                    </div>
+
                     <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
 
                     <h3 style="margin-bottom: 1rem;">Auto Speed Tests</h3>
@@ -1785,7 +1789,7 @@
             const heartbeatInterval = parseInt(document.getElementById('heartbeat-interval').value) || 60;
 
             try {
-                await Promise.all([
+                const [settingsRes, heartbeatRes] = await Promise.all([
                     fetch('/api/settings', {
                         method: 'PUT',
                         headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
@@ -1803,9 +1807,19 @@
                 if (refreshInterval) clearInterval(refreshInterval);
                 if (newRefresh > 0) {
                     refreshInterval = setInterval(loadComputers, newRefresh * 1000);
+                    document.getElementById('refresh-info-text').textContent = `Auto-refreshes every ${newRefresh} seconds`;
+                } else {
+                    document.getElementById('refresh-info-text').textContent = 'Manual refresh only';
                 }
 
-                showNotification('Settings saved!');
+                // Show feedback about agents notified
+                const heartbeatData = await heartbeatRes.json();
+                const agentsNotified = heartbeatData.agents_notified || 0;
+                if (agentsNotified > 0) {
+                    showNotification(`Settings saved! ${agentsNotified} agent(s) notified instantly.`);
+                } else {
+                    showNotification('Settings saved! No agents connected to notify.');
+                }
             } catch (e) {
                 showNotification('Failed to save settings');
             }
@@ -3044,16 +3058,30 @@
         }
 
         async function installSpeedtestCli(computerId) {
-            if (!confirm('This will run "pip3 install speedtest-cli" on the computer. Continue?')) return;
+            if (!confirm('This will install speedtest-cli on the computer. Continue?')) return;
 
             try {
+                // Find the computer to check its OS
+                const pc = computers.find(c => c.id === computerId);
+                const isWindows = pc && pc.os && pc.os.toLowerCase().includes('windows');
+
+                // Use appropriate command for the OS
+                const command = isWindows
+                    ? 'python -m pip install speedtest-cli --user'
+                    : 'pip3 install speedtest-cli --user || python3 -m pip install speedtest-cli --user';
+
                 const res = await fetch(`/api/exec/${computerId}`, {
                     method: 'POST',
                     headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: 'pip3 install speedtest-cli || pip install speedtest-cli' })
+                    body: JSON.stringify({ command })
                 });
                 const data = await res.json();
-                showNotification('Installing speedtest-cli... Check command history for result.');
+                showNotification('Installing speedtest-cli... Run a speed test in 30 seconds to verify.');
+
+                // Wait and then refresh to check if it worked
+                setTimeout(() => {
+                    showNotification('Try running a speed test now to see if speedtest-cli is working.');
+                }, 15000);
             } catch (e) {
                 showNotification('Failed to send install command', 'error');
             }

@@ -5,7 +5,7 @@ Sends heartbeats with system info to the central server.
 Uses WebSockets for instant command response!
 """
 
-AGENT_VERSION = "1.4.6"  # Increment this when updating the agent
+AGENT_VERSION = "1.4.7"  # Increment this when updating the agent
 
 import platform
 import socket
@@ -84,19 +84,44 @@ def get_rustdesk_info():
     info = {"id": None, "password": None, "installed": False}
 
     try:
+        # Determine config paths based on OS
         if platform.system() == "Windows":
-            rustdesk_conf = os.path.join(os.environ.get("APPDATA", ""), "RustDesk", "config", "RustDesk.toml")
-            rustdesk_conf2 = os.path.join(os.environ.get("APPDATA", ""), "RustDesk", "config", "RustDesk2.toml")
-        else:
-            rustdesk_conf = os.path.expanduser("~/.config/rustdesk/RustDesk.toml")
-            rustdesk_conf2 = os.path.expanduser("~/.config/rustdesk/RustDesk2.toml")
+            config_paths = [
+                os.path.join(os.environ.get("APPDATA", ""), "RustDesk", "config")
+            ]
+        elif platform.system() == "Darwin":  # macOS
+            config_paths = [
+                os.path.expanduser("~/Library/Application Support/rustdesk/config"),
+                os.path.expanduser("~/.config/rustdesk")  # Fallback for older versions
+            ]
+        else:  # Linux
+            config_paths = [
+                os.path.expanduser("~/.config/rustdesk")
+            ]
 
-        # Check if RustDesk is installed
-        if os.path.exists(rustdesk_conf) or os.path.exists(rustdesk_conf2):
-            info["installed"] = True
+        rustdesk_conf = None
+        rustdesk_conf2 = None
+
+        # Find config files
+        for config_dir in config_paths:
+            conf = os.path.join(config_dir, "RustDesk.toml")
+            conf2 = os.path.join(config_dir, "RustDesk2.toml")
+            if os.path.exists(conf):
+                rustdesk_conf = conf
+                info["installed"] = True
+            if os.path.exists(conf2):
+                rustdesk_conf2 = conf2
+                info["installed"] = True
+            if rustdesk_conf or rustdesk_conf2:
+                break
+
+        # Also check if RustDesk app exists on Mac
+        if platform.system() == "Darwin" and not info["installed"]:
+            if os.path.exists("/Applications/RustDesk.app"):
+                info["installed"] = True
 
         # Get ID from RustDesk.toml (try plain 'id' first, then use --get-id command)
-        if os.path.exists(rustdesk_conf):
+        if rustdesk_conf and os.path.exists(rustdesk_conf):
             with open(rustdesk_conf, "r") as f:
                 for line in f:
                     # Old format: id = '123456789'
@@ -111,6 +136,10 @@ def get_rustdesk_info():
                 rustdesk_paths.extend([
                     r"C:\Program Files\RustDesk\rustdesk.exe",
                     os.path.expandvars(r"%LOCALAPPDATA%\RustDesk\rustdesk.exe"),
+                ])
+            elif platform.system() == "Darwin":
+                rustdesk_paths.extend([
+                    "/Applications/RustDesk.app/Contents/MacOS/RustDesk",
                 ])
 
             for rustdesk_exe in rustdesk_paths:
@@ -127,7 +156,7 @@ def get_rustdesk_info():
                     continue
 
         # Get permanent password from RustDesk2.toml
-        if os.path.exists(rustdesk_conf2):
+        if rustdesk_conf2 and os.path.exists(rustdesk_conf2):
             with open(rustdesk_conf2, "r") as f:
                 for line in f:
                     if line.strip().startswith("password"):
@@ -151,6 +180,11 @@ def set_rustdesk_password(password):
     try:
         if platform.system() == "Windows":
             rustdesk_conf2 = os.path.join(os.environ.get("APPDATA", ""), "RustDesk", "config", "RustDesk2.toml")
+        elif platform.system() == "Darwin":  # macOS
+            rustdesk_conf2 = os.path.expanduser("~/Library/Application Support/rustdesk/config/RustDesk2.toml")
+            # Fallback to old path if new path doesn't exist
+            if not os.path.exists(os.path.dirname(rustdesk_conf2)):
+                rustdesk_conf2 = os.path.expanduser("~/.config/rustdesk/RustDesk2.toml")
         else:
             rustdesk_conf2 = os.path.expanduser("~/.config/rustdesk/RustDesk2.toml")
 

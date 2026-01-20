@@ -361,9 +361,12 @@ def init_db():
             download_mbps REAL,
             upload_mbps REAL,
             test_time_sec REAL,
+            network_name TEXT DEFAULT '',
             created_at TEXT
         )
     """)
+    # Auto-add network_name column if missing (for existing databases)
+    add_column_if_missing("speed_tests", "network_name", "TEXT", "''")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pending_commands (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1326,13 +1329,17 @@ async def websocket_endpoint(websocket: WebSocket, computer_id: str):
 
             elif data.get("type") == "speedtest_result":
                 # Store speed test result
-                conn = sqlite3.connect(DB_PATH)
-                conn.execute(
-                    "INSERT INTO speed_tests (computer_id, download_mbps, upload_mbps, test_time_sec, network_name, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (computer_id, data.get("download_mbps"), data.get("upload_mbps", 0), data.get("test_time_sec"), data.get("network_name", ""), datetime.now().isoformat())
-                )
-                conn.commit()
-                conn.close()
+                try:
+                    conn = sqlite3.connect(DB_PATH)
+                    conn.execute(
+                        "INSERT INTO speed_tests (computer_id, download_mbps, upload_mbps, test_time_sec, network_name, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                        (computer_id, data.get("download_mbps"), data.get("upload_mbps", 0), data.get("test_time_sec"), data.get("network_name", ""), datetime.now().isoformat())
+                    )
+                    conn.commit()
+                    conn.close()
+                    print(f"[Speedtest] Stored result for {computer_id}: {data.get('download_mbps')} Mbps down, {data.get('upload_mbps')} Mbps up")
+                except Exception as e:
+                    print(f"[Speedtest] ERROR storing result for {computer_id}: {e}")
 
             elif data.get("type") == "heartbeat":
                 # Handle heartbeat via WebSocket (optional, for efficiency)

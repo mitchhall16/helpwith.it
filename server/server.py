@@ -303,13 +303,6 @@ def init_db():
     add_column_if_missing("computers", "location_name", "TEXT", "''")
     add_column_if_missing("computers", "agent_version", "TEXT", "''")
 
-    # Pending commands table migrations
-    add_column_if_missing("pending_commands", "payload", "TEXT", "''")
-
-    # Speed tests table migrations
-    add_column_if_missing("speed_tests", "upload_mbps", "REAL", "0")
-    add_column_if_missing("speed_tests", "test_time_sec", "REAL", "0")
-    add_column_if_missing("speed_tests", "network_name", "TEXT", "''")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS alerts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

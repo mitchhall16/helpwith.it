@@ -1337,6 +1337,77 @@
             }
         }
 
+        async function loadUsers() {
+            try {
+                const res = await fetch('/api/admin/users', { headers: { 'Authorization': authHeader } });
+                if (res.status === 403) {
+                    document.getElementById('user-list').innerHTML = '<p style="color: var(--text-muted);">Admin access required to manage users</p>';
+                    return;
+                }
+                const data = await res.json();
+                const container = document.getElementById('user-list');
+                if (data.users.length === 0) {
+                    container.innerHTML = '<p>No users</p>';
+                    return;
+                }
+                container.innerHTML = data.users.map(u => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-secondary); border-radius: 4px; margin-bottom: 0.5rem;">
+                        <span><strong>${u.username}</strong> <span style="color: ${u.role === 'admin' ? 'var(--success)' : 'var(--text-muted)'}; font-size: 0.8rem;">(${u.role})</span></span>
+                        <button class="btn" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="deleteUser('${u.username}')">Delete</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('user-list').innerHTML = '<p style="color: var(--danger);">Failed to load users</p>';
+            }
+        }
+
+        async function addUser() {
+            const username = document.getElementById('new-username').value.trim();
+            const password = document.getElementById('new-password').value;
+            const role = document.getElementById('new-role').value;
+            if (!username || !password) {
+                showNotification('Username and password required', 'error');
+                return;
+            }
+            try {
+                const res = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, role })
+                });
+                if (res.ok) {
+                    showNotification(`User ${username} created!`);
+                    document.getElementById('new-username').value = '';
+                    document.getElementById('new-password').value = '';
+                    loadUsers();
+                } else {
+                    const data = await res.json();
+                    showNotification(data.detail || 'Failed to create user', 'error');
+                }
+            } catch (e) {
+                showNotification('Failed to create user', 'error');
+            }
+        }
+
+        async function deleteUser(username) {
+            if (!confirm(`Delete user "${username}"?`)) return;
+            try {
+                const res = await fetch(`/api/admin/users/${username}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': authHeader }
+                });
+                if (res.ok) {
+                    showNotification(`User ${username} deleted`);
+                    loadUsers();
+                } else {
+                    const data = await res.json();
+                    showNotification(data.detail || 'Failed to delete user', 'error');
+                }
+            } catch (e) {
+                showNotification('Failed to delete user', 'error');
+            }
+        }
+
         async function saveRustDeskPassword(id, source) {
             const inputId = source === 'card' ? `rustdesk-pw-card-${id}` : `rustdesk-password-${id}`;
             const password = document.getElementById(inputId).value;
@@ -1586,6 +1657,23 @@
 
                     <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
 
+                    <h3 style="margin-bottom: 1rem;">User Management</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        Admins can change settings and delete computers. Regular users can only view and use RustDesk.
+                    </p>
+                    <div id="user-list" style="margin-bottom: 1rem;">Loading users...</div>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                        <input type="text" id="new-username" placeholder="Username" style="flex: 1;">
+                        <input type="password" id="new-password" placeholder="Password" style="flex: 1;">
+                        <select id="new-role" style="width: auto;">
+                            <option value="admin">Admin</option>
+                            <option value="user">User</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="addUser()">Add User</button>
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
                     <h3 style="margin-bottom: 1rem;">Quick Add Computer</h3>
                     <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
                         Click the <strong>+ Add Computer</strong> button in the header for one-click install commands!
@@ -1616,6 +1704,9 @@
                         if (macEl) macEl.value = d.mac_full || d.mac;
                     })
                     .catch(() => {});
+
+                // Load users list
+                loadUsers();
             } catch (e) {
                 document.getElementById('settings-body').innerHTML = '<p style="color: var(--danger);">Failed to load settings</p>';
             }

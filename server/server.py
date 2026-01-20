@@ -418,7 +418,7 @@ def init_db():
 init_db()
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
-    """Verify login credentials against all admin users"""
+    """Verify login credentials against all users"""
     for user in ADMIN_USERS:
         correct_username = secrets.compare_digest(credentials.username, user["username"])
         correct_password = secrets.compare_digest(credentials.password, user["password"])
@@ -430,6 +430,20 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
         detail="Invalid credentials",
         headers={"WWW-Authenticate": "Basic"},
     )
+
+def get_user_role(username: str) -> str:
+    """Get role for a username"""
+    for user in ADMIN_USERS:
+        if user["username"] == username:
+            return user.get("role", "admin")  # Default to admin for legacy users
+    return "user"
+
+def require_admin(username: str = Depends(verify_credentials)):
+    """Require admin role for an endpoint"""
+    role = get_user_role(username)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return username
 
 def send_discord_notification(message):
     """Send notification to Discord webhook"""
@@ -683,7 +697,7 @@ async def update_computer(computer_id: str, request: Request, username: str = De
     return {"status": "updated"}
 
 @app.delete("/api/computers/{computer_id}")
-async def delete_computer(computer_id: str, username: str = Depends(verify_credentials)):
+async def delete_computer(computer_id: str, username: str = Depends(require_admin)):
     """Remove a computer from monitoring"""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("DELETE FROM computers WHERE id = ?", (computer_id,))
@@ -1099,7 +1113,7 @@ async def get_settings(username: str = Depends(verify_credentials)):
     return {"settings": settings}
 
 @app.put("/api/settings")
-async def update_settings(request: Request, username: str = Depends(verify_credentials)):
+async def update_settings(request: Request, username: str = Depends(require_admin)):
     """Update settings"""
     data = await request.json()
     conn = sqlite3.connect(DB_PATH)
@@ -1142,7 +1156,7 @@ async def change_password(request: Request, username: str = Depends(verify_crede
     return {"status": "updated"}
 
 @app.put("/api/config/regenerate-key")
-async def regenerate_api_key(username: str = Depends(verify_credentials)):
+async def regenerate_api_key(username: str = Depends(require_admin)):
     """Regenerate agent API key"""
     global AGENT_API_KEY, CONFIG
 
@@ -1153,6 +1167,64 @@ async def regenerate_api_key(username: str = Depends(verify_credentials)):
         json.dump(CONFIG, f, indent=2)
 
     return {"status": "updated", "new_key": AGENT_API_KEY}
+
+@app.get("/api/admin/users")
+async def get_admin_users(username: str = Depends(require_admin)):
+    """Get list of all users (without passwords)"""
+    return {"users": [{"username": u["username"], "role": u.get("role", "admin")} for u in ADMIN_USERS]}
+
+@app.get("/api/me")
+async def get_current_user(username: str = Depends(verify_credentials)):
+    """Get current user info"""
+    role = get_user_role(username)
+    return {"username": username, "role": role}
+
+@app.post("/api/admin/users")
+async def add_admin_user(request: Request, username: str = Depends(require_admin)):
+    """Add a new user (admin or regular)"""
+    global ADMIN_USERS, CONFIG
+    data = await request.json()
+    new_username = data.get("username", "").strip()
+    new_password = data.get("password", "").strip()
+    role = data.get("role", "user")  # "admin" or "user"
+
+    if not new_username or not new_password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if role not in ["admin", "user"]:
+        role = "user"
+
+    # Check if user already exists
+    for user in ADMIN_USERS:
+        if user["username"] == new_username:
+            raise HTTPException(status_code=400, detail="User already exists")
+
+    ADMIN_USERS.append({"username": new_username, "password": new_password, "role": role})
+    CONFIG["admin_users"] = ADMIN_USERS
+
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(CONFIG, f, indent=2)
+
+    return {"status": "created", "username": new_username, "role": role}
+
+@app.delete("/api/admin/users/{target_username}")
+async def delete_admin_user(target_username: str, username: str = Depends(require_admin)):
+    """Delete an admin user"""
+    global ADMIN_USERS, CONFIG
+
+    if len(ADMIN_USERS) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete last admin user")
+    if target_username == username:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+
+    ADMIN_USERS = [u for u in ADMIN_USERS if u["username"] != target_username]
+    CONFIG["admin_users"] = ADMIN_USERS
+
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(CONFIG, f, indent=2)
+
+    return {"status": "deleted"}
 
 @app.get("/api/config/heartbeat")
 async def get_heartbeat_interval(username: str = Depends(verify_credentials)):
@@ -1170,7 +1242,7 @@ async def get_agent_settings(key: str = ""):
     }
 
 @app.put("/api/config/heartbeat")
-async def set_heartbeat_interval(request: Request, username: str = Depends(verify_credentials)):
+async def set_heartbeat_interval(request: Request, username: str = Depends(require_admin)):
     """Set heartbeat interval (in seconds). Agents will use this when they're installed."""
     global HEARTBEAT_INTERVAL, CONFIG
     data = await request.json()

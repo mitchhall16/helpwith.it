@@ -1495,6 +1495,28 @@ async def set_rustdesk_password(computer_id: str, request: Request, username: st
         return {"status": "offline", "message": "Computer is not connected"}
 
 
+@app.post("/api/rustdesk/{computer_id}/save-password")
+async def save_rustdesk_password(computer_id: str, request: Request, username: str = Depends(verify_credentials)):
+    """Save RustDesk password for a computer (stored in dashboard, not sent to agent)"""
+    data = await request.json()
+    password = data.get("password", "")
+
+    conn = sqlite3.connect(DB_PATH)
+    # Get current extra_info
+    row = conn.execute("SELECT extra_info FROM computers WHERE id = ?", (computer_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Computer not found")
+
+    extra = json.loads(row[0] or "{}")
+    extra["rustdesk_password"] = password
+
+    conn.execute("UPDATE computers SET extra_info = ? WHERE id = ?", (json.dumps(extra), computer_id))
+    conn.commit()
+    conn.close()
+
+    return {"status": "saved"}
+
 @app.get("/api/rustdesk/{computer_id}/connect")
 async def get_rustdesk_connect_url(computer_id: str, username: str = Depends(verify_credentials)):
     """Get RustDesk connection URL for one-click connect"""

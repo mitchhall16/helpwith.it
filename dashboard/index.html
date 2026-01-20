@@ -1152,11 +1152,11 @@
                                     ${pc.extra?.rustdesk_password ? 'Connect' : 'Connect'}
                                 </button>
                             </div>
-                            ${!pc.extra?.rustdesk_password ? `
-                            <button class="btn" style="font-size: 0.75rem; width: 100%;" onclick="setupRustDesk('${pc.id}')" ${!pc.is_online ? 'disabled' : ''}>
-                                Setup One-Click Password
-                            </button>
-                            ` : `<span style="color: var(--success); font-size: 0.75rem;">One-click enabled</span>`}
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                <input type="password" id="rustdesk-password-${pc.id}" value="${pc.extra?.rustdesk_password || ''}" placeholder="RustDesk password" style="font-size: 0.75rem; flex: 1;">
+                                <button class="btn" style="font-size: 0.75rem;" onclick="saveRustDeskPassword('${pc.id}')">Save</button>
+                            </div>
+                            <span style="font-size: 0.65rem; color: var(--text-muted);">Set password here to match what's in RustDesk</span>
                             ` : `<p style="color: var(--text-muted); font-size: 0.8rem; margin: 0;">Install from <a href="https://rustdesk.com" target="_blank" style="color: var(--accent);">rustdesk.com</a></p>`}
                         </div>
                         <div style="margin-bottom: 0.75rem;">
@@ -1282,6 +1282,25 @@
                 }
             } catch (e) {
                 alert('Failed to set password: ' + e.message);
+            }
+        }
+
+        async function saveRustDeskPassword(id) {
+            const password = document.getElementById(`rustdesk-password-${id}`).value;
+            try {
+                const res = await fetch(`/api/rustdesk/${id}/save-password`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: password })
+                });
+                if (res.ok) {
+                    showNotification('RustDesk password saved!');
+                    loadComputers();
+                } else {
+                    showNotification('Failed to save password', 'error');
+                }
+            } catch (e) {
+                showNotification('Failed to save password', 'error');
             }
         }
 

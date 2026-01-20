@@ -1712,8 +1712,8 @@ Set-Location $dir
 # Download pre-configured agent (SERVER_URL and API_KEY already set)
 Invoke-WebRequest -Uri "{server_url}/install/agent.py?key={AGENT_API_KEY}" -OutFile "agent.py"
 
-# Install dependencies
-pip install psutil websockets 2>$null
+# Install dependencies silently
+Start-Process pip -ArgumentList "install psutil websockets --quiet" -NoNewWindow -Wait
 
 Write-Host ""
 Write-Host "========================================"

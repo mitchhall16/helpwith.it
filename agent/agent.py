@@ -5,7 +5,7 @@ Sends heartbeats with system info to the central server.
 Uses WebSockets for instant command response!
 """
 
-AGENT_VERSION = "1.4.2"  # Increment this when updating the agent
+AGENT_VERSION = "1.4.3"  # Increment this when updating the agent
 
 import platform
 import socket
@@ -22,117 +22,46 @@ import threading
 # ============================================
 # CONFIGURATION
 # ============================================
-# Config file location (next to executable or in home directory)
-def get_config_path():
-    """Get the config file path - checks multiple locations"""
-    # First check next to the executable/script
-    if getattr(sys, 'frozen', False):
-        # Running as compiled executable
-        exe_dir = os.path.dirname(sys.executable)
-    else:
-        # Running as script
-        exe_dir = os.path.dirname(os.path.abspath(__file__))
-
-    local_config = os.path.join(exe_dir, "agent-config.json")
-    home_config = os.path.join(os.path.expanduser("~"), ".pc-monitor-agent.json")
-
-    # Prefer local config if it exists, otherwise use home directory
-    if os.path.exists(local_config):
-        return local_config
-    elif os.path.exists(home_config):
-        return home_config
-    else:
-        # Default to local config for new installs
-        return local_config
-
-def load_or_create_config():
-    """Load config from file or prompt user to create one"""
-    config_path = get_config_path()
-
-    # Try to load existing config
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                return config
-        except:
-            pass
-
-    # No config found - prompt user
-    print("=" * 50)
-    print("  PC Monitor Agent - First Time Setup")
-    print("=" * 50)
-    print()
-    print("No configuration found. Let's set it up!")
-    print()
-
-    # Try to use a simple GUI if available, otherwise use terminal
-    try:
-        server_url = prompt_for_input("Server URL (e.g., http://192.168.1.100:8000): ")
-        api_key = prompt_for_input("API Key (from your server dashboard): ")
-    except (EOFError, KeyboardInterrupt):
-        print("\nSetup cancelled.")
-        sys.exit(1)
-
-    if not server_url or not api_key:
-        print("ERROR: Server URL and API Key are required!")
-        sys.exit(1)
-
-    # Clean up the URL
-    server_url = server_url.strip()
-    if not server_url.startswith("http"):
-        server_url = "http://" + server_url
-
-    config = {
-        "server_url": server_url,
-        "api_key": api_key.strip(),
-        "heartbeat_interval": 60,
-        "auto_update": True
-    }
-
-    # Save config
-    try:
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=2)
-        print(f"\nConfig saved to: {config_path}")
-    except Exception as e:
-        print(f"Warning: Could not save config: {e}")
-        print("You'll need to enter this again next time.")
-
-    print()
-    return config
-
-def prompt_for_input(prompt_text):
-    """Prompt for input - tries GUI first, falls back to terminal"""
-    # Try tkinter GUI first (available on most systems)
-    try:
-        import tkinter as tk
-        from tkinter import simpledialog
-
-        root = tk.Tk()
-        root.withdraw()  # Hide main window
-        root.attributes('-topmost', True)  # Bring to front
-
-        result = simpledialog.askstring("PC Monitor Agent", prompt_text, parent=root)
-        root.destroy()
-
-        if result is not None:
-            return result
-    except:
-        pass
-
-    # Fall back to terminal input
-    return input(prompt_text)
-
-# Load configuration
-_config = load_or_create_config()
-SERVER_URL = _config.get("server_url", "http://localhost:8000")
-API_KEY = _config.get("api_key", "")
-HEARTBEAT_INTERVAL = _config.get("heartbeat_interval", 60)
-AUTO_UPDATE = _config.get("auto_update", True)
+# These values are set by the server when you download the agent.
+# You can also create an agent-config.json file next to this script.
+SERVER_URL = "CONFIGURE_ME"
+API_KEY = "CONFIGURE_ME"
+HEARTBEAT_INTERVAL = 60  # seconds
 COMMAND_POLL_INTERVAL = 5  # seconds - fallback if WebSocket unavailable
-COMPUTER_NAME = platform.node()  # Or set a custom name like "Living Room PC"
+COMPUTER_NAME = platform.node()
+AUTO_UPDATE = True
 AUTO_UPDATE_INTERVAL = 300  # Check for updates every 5 minutes
+
+def get_config_dir():
+    """Get directory where the agent is running from"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    else:
+        return os.path.dirname(os.path.abspath(__file__))
+
+def load_config():
+    """Load config from file if it exists, otherwise use embedded values"""
+    global SERVER_URL, API_KEY, HEARTBEAT_INTERVAL, AUTO_UPDATE
+
+    # Check for config file next to executable
+    config_paths = [
+        os.path.join(get_config_dir(), "agent-config.json"),
+        os.path.join(os.path.expanduser("~"), ".pc-monitor-agent.json"),
+    ]
+
+    for config_path in config_paths:
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    SERVER_URL = config.get("server_url", SERVER_URL)
+                    API_KEY = config.get("api_key", API_KEY)
+                    HEARTBEAT_INTERVAL = config.get("heartbeat_interval", HEARTBEAT_INTERVAL)
+                    AUTO_UPDATE = config.get("auto_update", AUTO_UPDATE)
+                    return True
+            except:
+                pass
+    return False
 # ============================================
 
 # WebSocket connection state
@@ -1187,10 +1116,20 @@ def main():
     ╚═════════════════════════════════════════════╝
     """)
 
-    if not SERVER_URL or not API_KEY or "YOUR_SERVER_IP" in SERVER_URL:
-        print("ERROR: Server URL or API Key not configured!")
-        print("Delete the config file and run again to reconfigure:")
-        print(f"  Config: {get_config_path()}")
+    # Load config from file if available
+    load_config()
+
+    if SERVER_URL == "CONFIGURE_ME" or API_KEY == "CONFIGURE_ME":
+        print("ERROR: Agent not configured!")
+        print()
+        print("To configure, either:")
+        print("  1. Download the pre-configured agent from your server dashboard")
+        print("  2. Create agent-config.json with:")
+        print('     {"server_url": "http://YOUR_SERVER:8000", "api_key": "YOUR_KEY"}')
+        print()
+        print(f"  Config locations checked:")
+        print(f"    - {os.path.join(get_config_dir(), 'agent-config.json')}")
+        print(f"    - {os.path.join(os.path.expanduser('~'), '.pc-monitor-agent.json')}")
         return
 
     print("Starting agent... (Ctrl+C to stop)")

@@ -1567,16 +1567,14 @@ async def get_agent_config(request: Request, key: str = ""):
     return JSONResponse(config)
 
 @app.get("/i")
-async def quick_install_script(request: Request, service: str = ""):
-    """Quick install: curl -sL server/i | bash  OR  curl -sL server/i?service=1 | bash"""
+async def quick_install_script(request: Request):
+    """Quick install: curl -sL server/i | bash"""
     host = request.headers.get("host", "localhost:8000")
     server_url = f"http://{host}"
-    install_service = service == "1"
 
     script = f'''#!/bin/bash
 # PC Monitor Agent - Quick Install
 # Usage: curl -sL {server_url}/i | bash
-# For service install: curl -sL {server_url}/i?service=1 | sudo bash
 
 echo "Installing PC Monitor Agent..."
 mkdir -p /opt/pc-monitor 2>/dev/null || mkdir -p ~/pc-monitor
@@ -1598,12 +1596,24 @@ else
     PYTHON="$INSTALL_DIR/venv/bin/python"
 fi
 
-'''
-    if install_service:
-        script += f'''
-# Install as systemd service
-echo "Installing as system service..."
-cat > /etc/systemd/system/pc-monitor-agent.service << EOF
+echo ""
+echo "========================================"
+echo "  Installation complete!"
+echo "========================================"
+echo ""
+
+# Ask about startup install
+read -p "Install as service (auto-start on boot)? [y/N]: " INSTALL_SERVICE
+
+if [[ "$INSTALL_SERVICE" =~ ^[Yy]$ ]]; then
+    if [ "$EUID" -ne 0 ]; then
+        echo "Need sudo for service install. Run with: curl -sL {server_url}/i | sudo bash"
+        echo "Starting agent manually for now..."
+        exec $PYTHON $INSTALL_DIR/agent.py
+    fi
+
+    echo "Installing as system service..."
+    cat > /etc/systemd/system/pc-monitor-agent.service << EOF
 [Unit]
 Description=PC Monitor Agent
 After=network.target
@@ -1619,46 +1629,30 @@ WorkingDirectory=$INSTALL_DIR
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable pc-monitor-agent
-systemctl start pc-monitor-agent
+    systemctl daemon-reload
+    systemctl enable pc-monitor-agent
+    systemctl start pc-monitor-agent
 
-echo ""
-echo "========================================"
-echo "  Installed as service!"
-echo "========================================"
-echo "  Status:  sudo systemctl status pc-monitor-agent"
-echo "  Logs:    sudo journalctl -u pc-monitor-agent -f"
-echo "  Stop:    sudo systemctl stop pc-monitor-agent"
-echo "========================================"
-'''
-    else:
-        script += '''
-echo ""
-echo "========================================"
-echo "  Installation complete!"
-echo "========================================"
-echo ""
-echo "To run: $PYTHON $INSTALL_DIR/agent.py"
-echo ""
-echo "For service install (auto-start on boot):"
-echo "  curl -sL ''' + server_url + '''/i?service=1 | sudo bash"
-echo ""
-echo "Starting agent now..."
-exec $PYTHON $INSTALL_DIR/agent.py
+    echo ""
+    echo "Installed as service!"
+    echo "  Status:  sudo systemctl status pc-monitor-agent"
+    echo "  Logs:    sudo journalctl -u pc-monitor-agent -f"
+    echo "  Stop:    sudo systemctl stop pc-monitor-agent"
+else
+    echo "Starting agent now... (Ctrl+C to stop)"
+    exec $PYTHON $INSTALL_DIR/agent.py
+fi
 '''
     return PlainTextResponse(script, media_type="text/plain")
 
 @app.get("/i.ps1")
-async def quick_install_powershell(request: Request, service: str = ""):
-    """PowerShell install: iwr server/i.ps1 | iex  OR  iwr server/i.ps1?service=1 | iex"""
+async def quick_install_powershell(request: Request):
+    """PowerShell install: iwr server/i.ps1 | iex"""
     host = request.headers.get("host", "localhost:8000")
     server_url = f"http://{host}"
-    install_service = service == "1"
 
     script = f'''# PC Monitor Agent - Quick Install (PowerShell)
 # Usage: iwr {server_url}/i.ps1 | iex
-# For startup install: iwr {server_url}/i.ps1?service=1 | iex
 
 Write-Host "Installing PC Monitor Agent..."
 $dir = "$env:USERPROFILE\\pc-monitor"
@@ -1671,47 +1665,37 @@ Invoke-WebRequest -Uri "{server_url}/install/agent.py?key={AGENT_API_KEY}" -OutF
 # Install dependencies
 pip install psutil websockets 2>$null
 
-'''
-    if install_service:
-        script += '''
-# Add to Windows startup
-Write-Host "Adding to Windows startup..."
-$startup = [Environment]::GetFolderPath("Startup")
-$shortcut = "$startup\\PC-Monitor-Agent.lnk"
-$shell = New-Object -ComObject WScript.Shell
-$sc = $shell.CreateShortcut($shortcut)
-$sc.TargetPath = "pythonw.exe"
-$sc.Arguments = "$dir\\agent.py"
-$sc.WorkingDirectory = $dir
-$sc.WindowStyle = 7
-$sc.Save()
-
-# Also start it now in background
-Start-Process pythonw.exe -ArgumentList "$dir\\agent.py" -WorkingDirectory $dir -WindowStyle Hidden
-
-Write-Host ""
-Write-Host "========================================"
-Write-Host "  Installed to startup!"
-Write-Host "========================================"
-Write-Host "  Agent running in background"
-Write-Host "  Will auto-start on login"
-Write-Host "  Startup shortcut: $shortcut"
-Write-Host "========================================"
-'''
-    else:
-        script += f'''
 Write-Host ""
 Write-Host "========================================"
 Write-Host "  Installation complete!"
 Write-Host "========================================"
 Write-Host ""
-Write-Host "To run: python $dir\\agent.py"
-Write-Host ""
-Write-Host "For auto-start on login:"
-Write-Host "  iwr {server_url}/i.ps1?service=1 | iex"
-Write-Host ""
-Write-Host "Starting agent now..."
-python agent.py
+
+# Ask about startup install
+$response = Read-Host "Install to startup (auto-start on login)? [y/N]"
+
+if ($response -eq "y" -or $response -eq "Y") {{
+    Write-Host "Adding to Windows startup..."
+    $startup = [Environment]::GetFolderPath("Startup")
+    $shortcut = "$startup\\PC-Monitor-Agent.lnk"
+    $shell = New-Object -ComObject WScript.Shell
+    $sc = $shell.CreateShortcut($shortcut)
+    $sc.TargetPath = "pythonw.exe"
+    $sc.Arguments = "$dir\\agent.py"
+    $sc.WorkingDirectory = $dir
+    $sc.WindowStyle = 7
+    $sc.Save()
+
+    # Start in background
+    Start-Process pythonw.exe -ArgumentList "$dir\\agent.py" -WorkingDirectory $dir -WindowStyle Hidden
+
+    Write-Host ""
+    Write-Host "Installed to startup! Agent running in background."
+    Write-Host "Startup shortcut: $shortcut"
+}} else {{
+    Write-Host "Starting agent now... (close window to stop)"
+    python agent.py
+}}
 '''
     return PlainTextResponse(script, media_type="text/plain")
 

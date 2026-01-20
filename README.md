@@ -49,7 +49,7 @@ Download from [Releases](../../releases):
 
 ```bash
 # Clone
-git clone https://github.com/YOUR_USERNAME/pc-monitor.git
+git clone https://github.com/mitchhall16/helpwith.it.git
 cd pc-monitor
 
 # Server

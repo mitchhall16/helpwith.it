@@ -1427,11 +1427,21 @@
                     <h3 style="margin-bottom: 1rem;">Agent Settings</h3>
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1rem;">
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label>Heartbeat Interval (seconds)</label>
+                            <label>Heartbeat Interval</label>
                             <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">
                                 How often agents send status updates. New agents use this value.
                             </p>
-                            <input type="number" id="heartbeat-interval" value="${config.heartbeat_interval || 60}" min="10" max="3600">
+                            <select id="heartbeat-interval" style="width: 100%;">
+                                <option value="30" ${(config.heartbeat_interval || 60) == 30 ? 'selected' : ''}>30 seconds</option>
+                                <option value="60" ${(config.heartbeat_interval || 60) == 60 ? 'selected' : ''}>1 minute</option>
+                                <option value="300" ${config.heartbeat_interval == 300 ? 'selected' : ''}>5 minutes</option>
+                                <option value="600" ${config.heartbeat_interval == 600 ? 'selected' : ''}>10 minutes</option>
+                                <option value="1800" ${config.heartbeat_interval == 1800 ? 'selected' : ''}>30 minutes</option>
+                                <option value="3600" ${config.heartbeat_interval == 3600 ? 'selected' : ''}>1 hour</option>
+                                <option value="21600" ${config.heartbeat_interval == 21600 ? 'selected' : ''}>6 hours</option>
+                                <option value="43200" ${config.heartbeat_interval == 43200 ? 'selected' : ''}>12 hours</option>
+                                <option value="86400" ${config.heartbeat_interval == 86400 ? 'selected' : ''}>24 hours</option>
+                            </select>
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
                             <label>Dashboard Refresh (seconds)</label>

@@ -1147,11 +1147,11 @@ async def set_heartbeat_interval(request: Request, username: str = Depends(verif
     data = await request.json()
     interval = data.get("interval", 60)
 
-    # Validate interval (min 10 seconds, max 3600 = 1 hour)
+    # Validate interval (min 10 seconds, max 86400 = 24 hours)
     if interval < 10:
         interval = 10
-    if interval > 3600:
-        interval = 3600
+    if interval > 86400:
+        interval = 86400
 
     HEARTBEAT_INTERVAL = interval
     CONFIG["heartbeat_interval"] = interval

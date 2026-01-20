@@ -1487,9 +1487,27 @@ async def get_agent_script(request: Request, key: str = ""):
     if key != AGENT_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid key")
 
-    agent_path = os.path.join(BUNDLE_DIR, "agent", "agent.py")
-    with open(agent_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    # Try multiple paths to find agent.py
+    possible_paths = [
+        os.path.join(BUNDLE_DIR, "agent", "agent.py"),
+        os.path.join(BASE_DIR, "..", "agent", "agent.py"),
+        os.path.join(os.path.dirname(BASE_DIR), "agent", "agent.py"),
+    ]
+
+    agent_path = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            agent_path = path
+            break
+
+    if not agent_path:
+        raise HTTPException(status_code=500, detail=f"Agent file not found. Searched: {possible_paths}")
+
+    try:
+        with open(agent_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cannot read agent file: {e}")
 
     # Get server URL from request
     host = request.headers.get("host", "localhost:8000")

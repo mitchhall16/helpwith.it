@@ -5,7 +5,7 @@ Sends heartbeats with system info to the central server.
 Uses WebSockets for instant command response!
 """
 
-AGENT_VERSION = "1.4.7"  # Increment this when updating the agent
+AGENT_VERSION = "1.4.8"  # Increment this when updating the agent
 
 import platform
 import socket
@@ -18,6 +18,9 @@ import urllib.request
 import urllib.error
 import subprocess
 import threading
+
+# Hide console windows for subprocess on Windows
+SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
 
 # ============================================
 # CONFIGURATION - Set by server when downloaded
@@ -147,7 +150,7 @@ def get_rustdesk_info():
                     result = subprocess.run(
                         [rustdesk_exe, "--get-id"],
                         capture_output=True, text=True, timeout=5,
-                        creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+                        creationflags=SUBPROCESS_FLAGS
                     )
                     if result.returncode == 0 and result.stdout.strip():
                         info["id"] = result.stdout.strip()
@@ -224,7 +227,7 @@ def get_gpu_info():
         try:
             result = subprocess.run(
                 ['wmic', 'path', 'win32_videocontroller', 'get', 'name,adapterram'],
-                capture_output=True, text=True, timeout=10
+                capture_output=True, text=True, timeout=10, creationflags=SUBPROCESS_FLAGS
             )
             lines = [l.strip() for l in result.stdout.strip().split('\n') if l.strip() and 'Name' not in l]
             for line in lines:
@@ -236,7 +239,7 @@ def get_gpu_info():
     # Try nvidia-smi
     try:
         result = subprocess.run(['nvidia-smi', '--query-gpu=name,temperature.gpu,utilization.gpu', '--format=csv,noheader'],
-                              capture_output=True, text=True, timeout=10)
+                              capture_output=True, text=True, timeout=10, creationflags=SUBPROCESS_FLAGS)
         if result.returncode == 0:
             for line in result.stdout.strip().split('\n'):
                 parts = line.split(', ')
@@ -272,7 +275,7 @@ def get_connected_network():
             # Try to get WiFi SSID
             result = subprocess.run(
                 ['netsh', 'wlan', 'show', 'interfaces'],
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5, creationflags=SUBPROCESS_FLAGS
             )
             for line in result.stdout.split('\n'):
                 if 'SSID' in line and 'BSSID' not in line:
@@ -289,19 +292,19 @@ def get_connected_network():
         elif platform.system() == "Darwin":  # macOS
             result = subprocess.run(
                 ['/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport', '-I'],
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5, creationflags=SUBPROCESS_FLAGS
             )
             for line in result.stdout.split('\n'):
                 if ' SSID:' in line:
                     return {"type": "WiFi", "name": line.split(':')[1].strip()}
 
         else:  # Linux
-            result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True, timeout=5)
+            result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True, timeout=5, creationflags=SUBPROCESS_FLAGS)
             if result.returncode == 0 and result.stdout.strip():
                 return {"type": "WiFi", "name": result.stdout.strip()}
 
             # Check for ethernet
-            result = subprocess.run(['ip', 'route', 'get', '1'], capture_output=True, text=True, timeout=5)
+            result = subprocess.run(['ip', 'route', 'get', '1'], capture_output=True, text=True, timeout=5, creationflags=SUBPROCESS_FLAGS)
             if 'eth' in result.stdout or 'enp' in result.stdout:
                 return {"type": "Ethernet", "name": "Wired Connection"}
     except:
@@ -314,7 +317,7 @@ def get_wifi_signal_strength():
         if platform.system() == "Windows":
             result = subprocess.run(
                 ['netsh', 'wlan', 'show', 'interfaces'],
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5, creationflags=SUBPROCESS_FLAGS
             )
             for line in result.stdout.split('\n'):
                 if 'Signal' in line:
@@ -324,7 +327,7 @@ def get_wifi_signal_strength():
         elif platform.system() == "Darwin":  # macOS
             result = subprocess.run(
                 ['/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport', '-I'],
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5, creationflags=SUBPROCESS_FLAGS
             )
             for line in result.stdout.split('\n'):
                 if 'agrCtlRSSI' in line:
@@ -332,7 +335,7 @@ def get_wifi_signal_strength():
                     # Convert RSSI to percentage (rough approximation)
                     return max(0, min(100, 2 * (rssi + 100)))
         else:  # Linux
-            result = subprocess.run(['iwconfig'], capture_output=True, text=True, timeout=5)
+            result = subprocess.run(['iwconfig'], capture_output=True, text=True, timeout=5, creationflags=SUBPROCESS_FLAGS)
             import re
             match = re.search(r'Signal level[=:](-?\d+)', result.stdout)
             if match:
@@ -727,7 +730,8 @@ def execute_shell_command(command):
             shell=True,
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=60,
+            creationflags=SUBPROCESS_FLAGS
         )
         return {
             "output": result.stdout + result.stderr,
@@ -993,8 +997,7 @@ def websocket_listener():
         import websockets.sync.client as ws_client
     except ImportError:
         print("[WebSocket] Installing websockets for instant commands...")
-        import subprocess
-        subprocess.run(["pip", "install", "websockets", "--quiet"], capture_output=True)
+        subprocess.run(["pip", "install", "websockets", "--quiet"], capture_output=True, creationflags=SUBPROCESS_FLAGS)
         try:
             import websockets.sync.client as ws_client
             print("[WebSocket] Installed successfully!")

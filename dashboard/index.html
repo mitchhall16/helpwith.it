@@ -898,12 +898,9 @@
                                 ${pc.extra?.rustdesk_password ? 'One-Click Connect' : 'Connect'}
                             </button>
                         </div>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            ${pc.extra?.rustdesk_password ?
-                                `<span style="color: var(--success); font-size: 0.85rem;">Password configured for unattended access</span>` :
-                                `<span style="color: var(--warning); font-size: 0.85rem;">No password set</span>
-                                 <button class="btn" style="font-size: 0.8rem;" onclick="setupRustDesk('${pc.id}')" ${!pc.is_online ? 'disabled' : ''}>Setup Password</button>`
-                            }
+                        <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
+                            <input type="password" id="rustdesk-pw-card-${pc.id}" value="${pc.extra?.rustdesk_password || ''}" placeholder="RustDesk password" style="font-size: 0.8rem; flex: 1;">
+                            <button class="btn" style="font-size: 0.8rem;" onclick="saveRustDeskPassword('${pc.id}', 'card')">Save</button>
                         </div>
                         ` : `
                         <p style="color: var(--text-muted);">Install RustDesk for remote desktop: <a href="https://rustdesk.com" target="_blank" style="color: var(--accent);">rustdesk.com</a></p>
@@ -1285,8 +1282,9 @@
             }
         }
 
-        async function saveRustDeskPassword(id) {
-            const password = document.getElementById(`rustdesk-password-${id}`).value;
+        async function saveRustDeskPassword(id, source) {
+            const inputId = source === 'card' ? `rustdesk-pw-card-${id}` : `rustdesk-password-${id}`;
+            const password = document.getElementById(inputId).value;
             try {
                 const res = await fetch(`/api/rustdesk/${id}/save-password`, {
                     method: 'POST',

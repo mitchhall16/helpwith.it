@@ -1715,6 +1715,90 @@ python agent.py
 '''
     return PlainTextResponse(script, media_type="text/plain")
 
+@app.get("/u")
+async def uninstall_linux(request: Request):
+    """Uninstall agent on Linux: curl -sL server/u | sudo bash"""
+    host = request.headers.get("host", "localhost:8000")
+    server_url = f"http://{host}"
+
+    script = f'''#!/bin/bash
+# PC Monitor Agent - Uninstall
+# Usage: curl -sL {server_url}/u | sudo bash
+
+echo "Uninstalling PC Monitor Agent..."
+
+# Stop and disable systemd service if exists
+if systemctl is-active --quiet pc-monitor-agent 2>/dev/null; then
+    echo "Stopping service..."
+    systemctl stop pc-monitor-agent
+fi
+if systemctl is-enabled --quiet pc-monitor-agent 2>/dev/null; then
+    echo "Disabling service..."
+    systemctl disable pc-monitor-agent
+fi
+if [ -f /etc/systemd/system/pc-monitor-agent.service ]; then
+    echo "Removing service file..."
+    rm /etc/systemd/system/pc-monitor-agent.service
+    systemctl daemon-reload
+fi
+
+# Remove agent files
+if [ -d /opt/pc-monitor ]; then
+    echo "Removing /opt/pc-monitor..."
+    rm -rf /opt/pc-monitor
+fi
+if [ -d ~/pc-monitor ]; then
+    echo "Removing ~/pc-monitor..."
+    rm -rf ~/pc-monitor
+fi
+
+# Kill any running agent processes
+pkill -f "pc-monitor.*agent" 2>/dev/null || true
+
+echo ""
+echo "========================================"
+echo "  Uninstall complete!"
+echo "========================================"
+'''
+    return PlainTextResponse(script, media_type="text/plain")
+
+@app.get("/u.ps1")
+async def uninstall_windows(request: Request):
+    """Uninstall agent on Windows: iwr server/u.ps1 | iex"""
+    host = request.headers.get("host", "localhost:8000")
+    server_url = f"http://{host}"
+
+    script = f'''# PC Monitor Agent - Uninstall (PowerShell)
+# Usage: iwr {server_url}/u.ps1 | iex
+
+Write-Host "Uninstalling PC Monitor Agent..."
+
+# Stop any running agent
+Get-Process -Name "python*" -ErrorAction SilentlyContinue | Where-Object {{$_.CommandLine -like "*agent.py*"}} | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "pythonw*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+# Remove startup shortcut
+$startup = [Environment]::GetFolderPath("Startup")
+$shortcut = "$startup\\PC-Monitor-Agent.lnk"
+if (Test-Path $shortcut) {{
+    Write-Host "Removing startup shortcut..."
+    Remove-Item $shortcut -Force
+}}
+
+# Remove agent folder
+$dir = "$env:USERPROFILE\\pc-monitor"
+if (Test-Path $dir) {{
+    Write-Host "Removing $dir..."
+    Remove-Item $dir -Recurse -Force
+}}
+
+Write-Host ""
+Write-Host "========================================"
+Write-Host "  Uninstall complete!"
+Write-Host "========================================"
+'''
+    return PlainTextResponse(script, media_type="text/plain")
+
 @app.get("/api/install-commands")
 async def get_install_commands(request: Request, username: str = Depends(verify_credentials)):
     """Generate install commands for each platform"""

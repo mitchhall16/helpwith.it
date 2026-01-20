@@ -5,7 +5,7 @@ Sends heartbeats with system info to the central server.
 Uses WebSockets for instant command response!
 """
 
-AGENT_VERSION = "1.4.8"  # Increment this when updating the agent
+AGENT_VERSION = "1.4.9"  # Increment this when updating the agent
 
 import platform
 import socket
@@ -1116,8 +1116,36 @@ def check_for_updates():
         return False
 
 
+def check_already_running():
+    """Check if another agent instance is already running"""
+    try:
+        import psutil
+        current_pid = os.getpid()
+        current_script = os.path.abspath(__file__)
+
+        for proc in psutil.process_iter(['pid', 'cmdline']):
+            try:
+                if proc.info['pid'] == current_pid:
+                    continue
+                cmdline = proc.info.get('cmdline') or []
+                # Check if another python process is running agent.py
+                for arg in cmdline:
+                    if arg and 'agent.py' in arg:
+                        return True
+            except:
+                continue
+    except:
+        pass
+    return False
+
 def main():
     global ws_connected
+
+    # Prevent multiple instances
+    if check_already_running():
+        print("ERROR: Another agent instance is already running!")
+        print("Kill it first or check Task Manager for python processes.")
+        sys.exit(1)
 
     rustdesk_id = get_rustdesk_id()
     rustdesk_status = rustdesk_id if rustdesk_id else "Not installed"

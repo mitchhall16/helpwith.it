@@ -1551,11 +1551,8 @@ echo "Installing PC Monitor Agent..."
 mkdir -p ~/pc-monitor
 cd ~/pc-monitor
 
-# Download pre-configured agent
+# Download pre-configured agent (SERVER_URL and API_KEY already set)
 curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o agent.py
-
-# Download config file
-curl -s "{server_url}/install/agent-config.json?key={AGENT_API_KEY}" -o agent-config.json
 
 # Install dependencies
 if pip3 install psutil websockets 2>/dev/null; then
@@ -1595,11 +1592,8 @@ $dir = "$env:USERPROFILE\\pc-monitor"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 Set-Location $dir
 
-# Download pre-configured agent
+# Download pre-configured agent (SERVER_URL and API_KEY already set)
 Invoke-WebRequest -Uri "{server_url}/install/agent.py?key={AGENT_API_KEY}" -OutFile "agent.py"
-
-# Download config file
-Invoke-WebRequest -Uri "{server_url}/install/agent-config.json?key={AGENT_API_KEY}" -OutFile "agent-config.json"
 
 # Install dependencies
 pip install psutil websockets 2>$null

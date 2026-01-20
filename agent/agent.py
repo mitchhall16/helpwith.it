@@ -5,7 +5,7 @@ Sends heartbeats with system info to the central server.
 Uses WebSockets for instant command response!
 """
 
-AGENT_VERSION = "1.4.3"  # Increment this when updating the agent
+AGENT_VERSION = "1.4.4"  # Increment this when updating the agent
 
 import platform
 import socket
@@ -20,10 +20,8 @@ import subprocess
 import threading
 
 # ============================================
-# CONFIGURATION
+# CONFIGURATION - Set by server when downloaded
 # ============================================
-# These values are set by the server when you download the agent.
-# You can also create an agent-config.json file next to this script.
 SERVER_URL = "CONFIGURE_ME"
 API_KEY = "CONFIGURE_ME"
 HEARTBEAT_INTERVAL = 60  # seconds
@@ -31,37 +29,6 @@ COMMAND_POLL_INTERVAL = 5  # seconds - fallback if WebSocket unavailable
 COMPUTER_NAME = platform.node()
 AUTO_UPDATE = True
 AUTO_UPDATE_INTERVAL = 300  # Check for updates every 5 minutes
-
-def get_config_dir():
-    """Get directory where the agent is running from"""
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        return os.path.dirname(os.path.abspath(__file__))
-
-def load_config():
-    """Load config from file if it exists, otherwise use embedded values"""
-    global SERVER_URL, API_KEY, HEARTBEAT_INTERVAL, AUTO_UPDATE
-
-    # Check for config file next to executable
-    config_paths = [
-        os.path.join(get_config_dir(), "agent-config.json"),
-        os.path.join(os.path.expanduser("~"), ".pc-monitor-agent.json"),
-    ]
-
-    for config_path in config_paths:
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                    SERVER_URL = config.get("server_url", SERVER_URL)
-                    API_KEY = config.get("api_key", API_KEY)
-                    HEARTBEAT_INTERVAL = config.get("heartbeat_interval", HEARTBEAT_INTERVAL)
-                    AUTO_UPDATE = config.get("auto_update", AUTO_UPDATE)
-                    return True
-            except:
-                pass
-    return False
 # ============================================
 
 # WebSocket connection state
@@ -1116,20 +1083,11 @@ def main():
     ╚═════════════════════════════════════════════╝
     """)
 
-    # Load config from file if available
-    load_config()
-
     if SERVER_URL == "CONFIGURE_ME" or API_KEY == "CONFIGURE_ME":
         print("ERROR: Agent not configured!")
         print()
-        print("To configure, either:")
-        print("  1. Download the pre-configured agent from your server dashboard")
-        print("  2. Create agent-config.json with:")
-        print('     {"server_url": "http://YOUR_SERVER:8000", "api_key": "YOUR_KEY"}')
-        print()
-        print(f"  Config locations checked:")
-        print(f"    - {os.path.join(get_config_dir(), 'agent-config.json')}")
-        print(f"    - {os.path.join(os.path.expanduser('~'), '.pc-monitor-agent.json')}")
+        print("Download the agent from your server:")
+        print("  curl -sL http://YOUR_SERVER:8000/i | bash")
         return
 
     print("Starting agent... (Ctrl+C to stop)")

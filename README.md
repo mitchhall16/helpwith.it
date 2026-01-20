@@ -25,17 +25,28 @@
 This is the computer that runs the dashboard. Can be any computer that stays on.
 
 **On Windows:**
-1. Download `PCMonitorServer-Setup.exe` from [Releases](../../releases)
-2. Run it and click Next through the installer
+1. Go to [Releases](../../releases) and download `pc-monitor-server.exe`
+2. Double-click to run it
 3. Open your browser to `http://localhost:8000`
-4. Done! You'll see your login info in the window
+4. Done!
 
-**On Linux/Mac:**
-1. Download `pc-monitor-server` from [Releases](../../releases)
+**On Linux:**
+1. Go to [Releases](../../releases) and download `pc-monitor-server-linux`
 2. Open terminal and run:
    ```
-   chmod +x pc-monitor-server
-   ./pc-monitor-server
+   cd ~/Downloads
+   chmod +x pc-monitor-server-linux
+   ./pc-monitor-server-linux
+   ```
+3. Open browser to `http://localhost:8000`
+
+**On Mac:**
+1. Go to [Releases](../../releases) and download `pc-monitor-server-mac`
+2. Open terminal and run:
+   ```
+   cd ~/Downloads
+   chmod +x pc-monitor-server-mac
+   ./pc-monitor-server-mac
    ```
 3. Open browser to `http://localhost:8000`
 
@@ -45,19 +56,29 @@ This is the computer that runs the dashboard. Can be any computer that stays on.
 
 On each computer you want to monitor:
 
-**Easiest Way:**
-1. Open the dashboard (from Step 1)
-2. Click **Settings** (gear icon)
-3. Find "Add New Computer" section
-4. Copy the command for your system (Windows/Linux/Mac)
-5. Paste and run it on the computer you want to add
-6. That's it! The computer will appear in your dashboard
-
-**Or Download Installer:**
-1. Download `PCMonitorAgent-Setup.exe` from [Releases](../../releases)
-2. Run it
+**On Windows:**
+1. Go to [Releases](../../releases) and download `pc-monitor-agent.exe`
+2. Double-click to run it
 3. Enter your server's address when asked (like `http://192.168.1.100:8000`)
-4. Done!
+4. Done! The computer will appear in your dashboard
+
+**On Linux:**
+1. Go to [Releases](../../releases) and download `pc-monitor-agent-linux`
+2. Open terminal and run:
+   ```
+   cd ~/Downloads
+   chmod +x pc-monitor-agent-linux
+   ./pc-monitor-agent-linux http://YOUR_SERVER_IP:8000
+   ```
+
+**On Mac:**
+1. Go to [Releases](../../releases) and download `pc-monitor-agent-mac`
+2. Open terminal and run:
+   ```
+   cd ~/Downloads
+   chmod +x pc-monitor-agent-mac
+   ./pc-monitor-agent-mac http://YOUR_SERVER_IP:8000
+   ```
 
 ---
 

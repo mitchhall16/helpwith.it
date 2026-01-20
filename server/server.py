@@ -548,12 +548,21 @@ async def receive_heartbeat(request: Request):
 
     conn = sqlite3.connect(DB_PATH)
 
-    # Check if computer exists to preserve group/notes and custom name
-    existing = conn.execute("SELECT group_name, notes, name FROM computers WHERE id = ?", (data.get("id"),)).fetchone()
+    # Check if computer exists to preserve group/notes, custom name, and dashboard-set values
+    existing = conn.execute("SELECT group_name, notes, name, extra_info FROM computers WHERE id = ?", (data.get("id"),)).fetchone()
     group_name = existing[0] if existing else "Ungrouped"
     notes = existing[1] if existing else ""
     # Keep custom name if set, otherwise use reported name
     display_name = existing[2] if existing else data.get("name")
+
+    # Merge extra_info: keep dashboard-saved values (like rustdesk_password), update with agent data
+    existing_extra = json.loads(existing[3] or "{}") if existing else {}
+    new_extra = data.get("extra", {})
+    # Preserve dashboard-saved fields
+    dashboard_fields = ["rustdesk_password"]
+    for field in dashboard_fields:
+        if field in existing_extra and existing_extra[field]:
+            new_extra[field] = existing_extra[field]
 
     conn.execute("""
         INSERT OR REPLACE INTO computers
@@ -568,7 +577,7 @@ async def receive_heartbeat(request: Request):
         data.get("memory_percent", 0),
         data.get("disk_percent", 0),
         datetime.now().isoformat(),
-        json.dumps(data.get("extra", {})),
+        json.dumps(new_extra),
         group_name,
         notes,
         data.get("extra", {}).get("mac_address", ""),

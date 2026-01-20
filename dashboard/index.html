@@ -1424,6 +1424,31 @@
 
                     <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
 
+                    <h3 style="margin-bottom: 1rem;">Agent Settings</h3>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Heartbeat Interval (seconds)</label>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                                How often agents send status updates. New agents use this value.
+                            </p>
+                            <input type="number" id="heartbeat-interval" value="${config.heartbeat_interval || 60}" min="10" max="3600">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Dashboard Refresh (seconds)</label>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                                How often this dashboard refreshes.
+                            </p>
+                            <select id="dashboard-refresh" style="width: 100%;">
+                                <option value="10" ${(s.dashboard_refresh || '30') === '10' ? 'selected' : ''}>10 seconds</option>
+                                <option value="30" ${(s.dashboard_refresh || '30') === '30' ? 'selected' : ''}>30 seconds</option>
+                                <option value="60" ${s.dashboard_refresh === '60' ? 'selected' : ''}>60 seconds</option>
+                                <option value="0" ${s.dashboard_refresh === '0' ? 'selected' : ''}>Manual only</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
                     <h3 style="margin-bottom: 1rem;">Auto Speed Tests</h3>
                     <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
                         Automatically run speed tests on all computers at regular intervals.
@@ -1579,15 +1604,34 @@
                 alert_memory_threshold: document.getElementById('alert-memory').value,
                 alert_disk_threshold: document.getElementById('alert-disk').value,
                 auto_speedtest_enabled: document.getElementById('auto-speedtest-enabled').checked ? 'true' : 'false',
-                auto_speedtest_interval_hours: document.getElementById('auto-speedtest-interval').value
+                auto_speedtest_interval_hours: document.getElementById('auto-speedtest-interval').value,
+                dashboard_refresh: document.getElementById('dashboard-refresh').value
             };
 
+            // Save heartbeat interval separately (it's a config setting, not a db setting)
+            const heartbeatInterval = parseInt(document.getElementById('heartbeat-interval').value) || 60;
+
             try {
-                await fetch('/api/settings', {
-                    method: 'PUT',
-                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(settings)
-                });
+                await Promise.all([
+                    fetch('/api/settings', {
+                        method: 'PUT',
+                        headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(settings)
+                    }),
+                    fetch('/api/config/heartbeat', {
+                        method: 'PUT',
+                        headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ interval: heartbeatInterval })
+                    })
+                ]);
+
+                // Update refresh interval
+                const newRefresh = parseInt(settings.dashboard_refresh) || 30;
+                if (refreshInterval) clearInterval(refreshInterval);
+                if (newRefresh > 0) {
+                    refreshInterval = setInterval(loadComputers, newRefresh * 1000);
+                }
+
                 showNotification('Settings saved!');
             } catch (e) {
                 showNotification('Failed to save settings');

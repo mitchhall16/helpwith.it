@@ -1,0 +1,103 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller psutil websockets speedtest-cli fastapi uvicorn aiofiles python-multipart bcrypt
+      - name: Build Server
+        run: pyinstaller --onefile --name pc-monitor-server --add-data "dashboard;dashboard" server/server.py
+      - name: Build Agent
+        run: pyinstaller --onefile --name pc-monitor-agent agent/agent.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds
+          path: dist/*.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller psutil websockets speedtest-cli fastapi uvicorn aiofiles python-multipart bcrypt
+      - name: Build Server
+        run: pyinstaller --onefile --name pc-monitor-server --add-data "dashboard:dashboard" server/server.py
+      - name: Build Agent
+        run: pyinstaller --onefile --name pc-monitor-agent agent/agent.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-builds
+          path: |
+            dist/pc-monitor-server
+            dist/pc-monitor-agent
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller psutil websockets speedtest-cli fastapi uvicorn aiofiles python-multipart bcrypt
+      - name: Build Server
+        run: pyinstaller --onefile --name pc-monitor-server --add-data "dashboard:dashboard" server/server.py
+      - name: Build Agent
+        run: pyinstaller --onefile --name pc-monitor-agent agent/agent.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-builds
+          path: |
+            dist/pc-monitor-server
+            dist/pc-monitor-agent
+
+  release:
+    needs: [build-windows, build-linux, build-mac]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows builds
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-builds
+          path: windows
+      - name: Download Linux builds
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-builds
+          path: linux
+      - name: Download Mac builds
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-builds
+          path: mac
+      - name: Rename files
+        run: |
+          mv linux/pc-monitor-server linux/pc-monitor-server-linux
+          mv linux/pc-monitor-agent linux/pc-monitor-agent-linux
+          mv mac/pc-monitor-server mac/pc-monitor-server-mac
+          mv mac/pc-monitor-agent mac/pc-monitor-agent-mac
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            windows/*.exe
+            linux/*
+            mac/*

@@ -91,6 +91,7 @@ if not ADMIN_USERS:
     ADMIN_USERS = [{"username": CONFIG["admin_username"], "password": CONFIG["admin_password"]}]
 
 AGENT_API_KEY = CONFIG["agent_api_key"]
+HEARTBEAT_INTERVAL = CONFIG.get("heartbeat_interval", 60)  # Default 60 seconds
 
 # Optional InfluxDB support
 INFLUXDB_URL = CONFIG.get("influxdb_url", "")  # e.g., "http://localhost:8086"
@@ -1095,6 +1096,7 @@ async def get_config(username: str = Depends(verify_credentials)):
     return {
         "admin_username": ADMIN_USERS[0]["username"],
         "agent_api_key": AGENT_API_KEY,
+        "heartbeat_interval": HEARTBEAT_INTERVAL,
         # Don't expose password
     }
 
@@ -1132,6 +1134,32 @@ async def regenerate_api_key(username: str = Depends(verify_credentials)):
         json.dump(CONFIG, f, indent=2)
 
     return {"status": "updated", "new_key": AGENT_API_KEY}
+
+@app.get("/api/config/heartbeat")
+async def get_heartbeat_interval(username: str = Depends(verify_credentials)):
+    """Get heartbeat interval setting"""
+    return {"heartbeat_interval": HEARTBEAT_INTERVAL}
+
+@app.put("/api/config/heartbeat")
+async def set_heartbeat_interval(request: Request, username: str = Depends(verify_credentials)):
+    """Set heartbeat interval (in seconds). Agents will use this when they're installed."""
+    global HEARTBEAT_INTERVAL, CONFIG
+    data = await request.json()
+    interval = data.get("interval", 60)
+
+    # Validate interval (min 10 seconds, max 3600 = 1 hour)
+    if interval < 10:
+        interval = 10
+    if interval > 3600:
+        interval = 3600
+
+    HEARTBEAT_INTERVAL = interval
+    CONFIG["heartbeat_interval"] = interval
+
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(CONFIG, f, indent=2)
+
+    return {"status": "updated", "heartbeat_interval": HEARTBEAT_INTERVAL}
 
 # ============================================
 # Computer rename
@@ -1513,9 +1541,10 @@ async def get_agent_script(request: Request, key: str = ""):
     host = request.headers.get("host", "localhost:8000")
     server_url = f"http://{host}"
 
-    # Pre-configure the agent with server URL and API key
+    # Pre-configure the agent with server URL, API key, and heartbeat interval
     content = content.replace('SERVER_URL = "CONFIGURE_ME"', f'SERVER_URL = "{server_url}"')
     content = content.replace('API_KEY = "CONFIGURE_ME"', f'API_KEY = "{AGENT_API_KEY}"')
+    content = content.replace('HEARTBEAT_INTERVAL = 60', f'HEARTBEAT_INTERVAL = {HEARTBEAT_INTERVAL}')
 
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
@@ -1538,54 +1567,98 @@ async def get_agent_config(request: Request, key: str = ""):
     return JSONResponse(config)
 
 @app.get("/i")
-async def quick_install_script(request: Request):
-    """Super short URL for quick install: curl http://server:8000/i | bash"""
+async def quick_install_script(request: Request, service: str = ""):
+    """Quick install: curl -sL server/i | bash  OR  curl -sL server/i?service=1 | bash"""
     host = request.headers.get("host", "localhost:8000")
     server_url = f"http://{host}"
+    install_service = service == "1"
 
     script = f'''#!/bin/bash
 # PC Monitor Agent - Quick Install
 # Usage: curl -sL {server_url}/i | bash
+# For service install: curl -sL {server_url}/i?service=1 | sudo bash
 
 echo "Installing PC Monitor Agent..."
-mkdir -p ~/pc-monitor
-cd ~/pc-monitor
+mkdir -p /opt/pc-monitor 2>/dev/null || mkdir -p ~/pc-monitor
+cd /opt/pc-monitor 2>/dev/null || cd ~/pc-monitor
+INSTALL_DIR=$(pwd)
 
 # Download pre-configured agent (SERVER_URL and API_KEY already set)
 curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o agent.py
 
 # Install dependencies
 if pip3 install psutil websockets 2>/dev/null; then
-    PYTHON="python3"
+    PYTHON=$(which python3)
 elif pip3 install --user psutil websockets 2>/dev/null; then
-    PYTHON="python3"
+    PYTHON=$(which python3)
 else
     echo "Creating virtual environment..."
     python3 -m venv venv
     venv/bin/pip install psutil websockets
-    PYTHON="venv/bin/python"
+    PYTHON="$INSTALL_DIR/venv/bin/python"
 fi
 
+'''
+    if install_service:
+        script += f'''
+# Install as systemd service
+echo "Installing as system service..."
+cat > /etc/systemd/system/pc-monitor-agent.service << EOF
+[Unit]
+Description=PC Monitor Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$PYTHON $INSTALL_DIR/agent.py
+Restart=always
+RestartSec=10
+WorkingDirectory=$INSTALL_DIR
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable pc-monitor-agent
+systemctl start pc-monitor-agent
+
+echo ""
+echo "========================================"
+echo "  Installed as service!"
+echo "========================================"
+echo "  Status:  sudo systemctl status pc-monitor-agent"
+echo "  Logs:    sudo journalctl -u pc-monitor-agent -f"
+echo "  Stop:    sudo systemctl stop pc-monitor-agent"
+echo "========================================"
+'''
+    else:
+        script += '''
 echo ""
 echo "========================================"
 echo "  Installation complete!"
 echo "========================================"
 echo ""
-echo "To run: $PYTHON ~/pc-monitor/agent.py"
+echo "To run: $PYTHON $INSTALL_DIR/agent.py"
+echo ""
+echo "For service install (auto-start on boot):"
+echo "  curl -sL ''' + server_url + '''/i?service=1 | sudo bash"
 echo ""
 echo "Starting agent now..."
-exec $PYTHON ~/pc-monitor/agent.py
+exec $PYTHON $INSTALL_DIR/agent.py
 '''
     return PlainTextResponse(script, media_type="text/plain")
 
 @app.get("/i.ps1")
-async def quick_install_powershell(request: Request):
-    """PowerShell install: iwr http://server:8000/i.ps1 | iex"""
+async def quick_install_powershell(request: Request, service: str = ""):
+    """PowerShell install: iwr server/i.ps1 | iex  OR  iwr server/i.ps1?service=1 | iex"""
     host = request.headers.get("host", "localhost:8000")
     server_url = f"http://{host}"
+    install_service = service == "1"
 
     script = f'''# PC Monitor Agent - Quick Install (PowerShell)
 # Usage: iwr {server_url}/i.ps1 | iex
+# For startup install: iwr {server_url}/i.ps1?service=1 | iex
 
 Write-Host "Installing PC Monitor Agent..."
 $dir = "$env:USERPROFILE\\pc-monitor"
@@ -1598,12 +1671,44 @@ Invoke-WebRequest -Uri "{server_url}/install/agent.py?key={AGENT_API_KEY}" -OutF
 # Install dependencies
 pip install psutil websockets 2>$null
 
+'''
+    if install_service:
+        script += '''
+# Add to Windows startup
+Write-Host "Adding to Windows startup..."
+$startup = [Environment]::GetFolderPath("Startup")
+$shortcut = "$startup\\PC-Monitor-Agent.lnk"
+$shell = New-Object -ComObject WScript.Shell
+$sc = $shell.CreateShortcut($shortcut)
+$sc.TargetPath = "pythonw.exe"
+$sc.Arguments = "$dir\\agent.py"
+$sc.WorkingDirectory = $dir
+$sc.WindowStyle = 7
+$sc.Save()
+
+# Also start it now in background
+Start-Process pythonw.exe -ArgumentList "$dir\\agent.py" -WorkingDirectory $dir -WindowStyle Hidden
+
+Write-Host ""
+Write-Host "========================================"
+Write-Host "  Installed to startup!"
+Write-Host "========================================"
+Write-Host "  Agent running in background"
+Write-Host "  Will auto-start on login"
+Write-Host "  Startup shortcut: $shortcut"
+Write-Host "========================================"
+'''
+    else:
+        script += f'''
 Write-Host ""
 Write-Host "========================================"
 Write-Host "  Installation complete!"
 Write-Host "========================================"
 Write-Host ""
 Write-Host "To run: python $dir\\agent.py"
+Write-Host ""
+Write-Host "For auto-start on login:"
+Write-Host "  iwr {server_url}/i.ps1?service=1 | iex"
 Write-Host ""
 Write-Host "Starting agent now..."
 python agent.py

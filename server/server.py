@@ -204,18 +204,47 @@ else
     sed -i 's|API_KEY = .*|API_KEY = "{AGENT_API_KEY}"|' ~/pc-monitor-agent.py
 fi
 
-# Install dependencies
-pip3 install psutil websockets
+# Install dependencies - try multiple methods for compatibility
+echo "Installing dependencies..."
+if pip3 install psutil websockets 2>/dev/null; then
+    PYTHON_CMD="python3"
+elif pip3 install --user psutil websockets 2>/dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python3 &>/dev/null; then
+    # Create venv for externally managed environments (Ubuntu 23.04+, etc.)
+    echo "Creating virtual environment..."
+    python3 -m venv ~/.pc-monitor-venv
+    ~/.pc-monitor-venv/bin/pip install psutil websockets
+    PYTHON_CMD="$HOME/.pc-monitor-venv/bin/python"
+
+    # Create launcher script
+    cat > ~/pc-monitor-agent << 'LAUNCHER'
+#!/bin/bash
+~/.pc-monitor-venv/bin/python ~/pc-monitor-agent.py "$@"
+LAUNCHER
+    chmod +x ~/pc-monitor-agent
+else
+    echo "ERROR: Python3 not found. Please install Python 3."
+    exit 1
+fi
 
 echo
 echo "========================================"
 echo "Installation complete!"
 echo
-echo "To run the agent:"
-echo "  python3 ~/pc-monitor-agent.py"
-echo
-echo "To run in background:"
-echo "  nohup python3 ~/pc-monitor-agent.py &"
+if [ -f ~/pc-monitor-agent ]; then
+    echo "To run the agent:"
+    echo "  ~/pc-monitor-agent"
+    echo
+    echo "To run in background:"
+    echo "  nohup ~/pc-monitor-agent &"
+else
+    echo "To run the agent:"
+    echo "  $PYTHON_CMD ~/pc-monitor-agent.py"
+    echo
+    echo "To run in background:"
+    echo "  nohup $PYTHON_CMD ~/pc-monitor-agent.py &"
+fi
 echo "========================================"
 '''
     with open(os.path.join(scripts_dir, "install-mac-linux.sh"), "w") as f:
@@ -1479,16 +1508,16 @@ async def get_install_commands(request: Request, username: str = Depends(verify_
     windows_agent = f'''powershell -ExecutionPolicy Bypass -Command "mkdir $env:USERPROFILE\\pc-monitor-agent -Force; Invoke-WebRequest -Uri '{server_url}/install/agent.py?key={AGENT_API_KEY}' -OutFile $env:USERPROFILE\\pc-monitor-agent\\agent.py; (Get-Content $env:USERPROFILE\\pc-monitor-agent\\agent.py) -replace 'SERVER_URL = .*', 'SERVER_URL = \\\"{server_url}\\\"' -replace 'API_KEY = .*', 'API_KEY = \\\"{AGENT_API_KEY}\\\"' | Set-Content $env:USERPROFILE\\pc-monitor-agent\\agent.py; pip install psutil websockets speedtest-cli; python $env:USERPROFILE\\pc-monitor-agent\\agent.py"'''
 
     # Linux/Ubuntu - Full setup (Agent + RustDesk)
-    linux_full = f'''curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o ~/pc-monitor-agent.py && sed -i 's|SERVER_URL = .*|SERVER_URL = "{server_url}"|' ~/pc-monitor-agent.py && sed -i 's|API_KEY = .*|API_KEY = "{AGENT_API_KEY}"|' ~/pc-monitor-agent.py && pip3 install psutil websockets speedtest-cli && wget -qO /tmp/rustdesk.deb https://github.com/rustdesk/rustdesk/releases/download/1.4.5/rustdesk-1.4.5-x86_64.deb && sudo dpkg -i /tmp/rustdesk.deb; sudo apt install -f -y; python3 ~/pc-monitor-agent.py'''
+    linux_full = f'''curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o ~/pc-monitor-agent.py && sed -i 's|SERVER_URL = .*|SERVER_URL = "{server_url}"|' ~/pc-monitor-agent.py && sed -i 's|API_KEY = .*|API_KEY = "{AGENT_API_KEY}"|' ~/pc-monitor-agent.py && (pip3 install psutil websockets speedtest-cli 2>/dev/null || pip3 install --user psutil websockets speedtest-cli 2>/dev/null || (python3 -m venv ~/.pc-monitor-venv && ~/.pc-monitor-venv/bin/pip install psutil websockets speedtest-cli)) && wget -qO /tmp/rustdesk.deb https://github.com/rustdesk/rustdesk/releases/download/1.4.5/rustdesk-1.4.5-x86_64.deb && sudo dpkg -i /tmp/rustdesk.deb; sudo apt install -f -y; (~/.pc-monitor-venv/bin/python ~/pc-monitor-agent.py 2>/dev/null || python3 ~/pc-monitor-agent.py)'''
 
     # Linux/Ubuntu - Agent only
-    linux_agent = f'''curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o ~/pc-monitor-agent.py && sed -i 's|SERVER_URL = .*|SERVER_URL = "{server_url}"|' ~/pc-monitor-agent.py && sed -i 's|API_KEY = .*|API_KEY = "{AGENT_API_KEY}"|' ~/pc-monitor-agent.py && pip3 install psutil websockets speedtest-cli && python3 ~/pc-monitor-agent.py'''
+    linux_agent = f'''curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o ~/pc-monitor-agent.py && sed -i 's|SERVER_URL = .*|SERVER_URL = "{server_url}"|' ~/pc-monitor-agent.py && sed -i 's|API_KEY = .*|API_KEY = "{AGENT_API_KEY}"|' ~/pc-monitor-agent.py && (pip3 install psutil websockets speedtest-cli 2>/dev/null || pip3 install --user psutil websockets speedtest-cli 2>/dev/null || (python3 -m venv ~/.pc-monitor-venv && ~/.pc-monitor-venv/bin/pip install psutil websockets speedtest-cli)) && (~/.pc-monitor-venv/bin/python ~/pc-monitor-agent.py 2>/dev/null || python3 ~/pc-monitor-agent.py)'''
 
     # Mac - Full setup (Agent + RustDesk)
-    mac_full = f'''curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o ~/pc-monitor-agent.py && sed -i '' 's|SERVER_URL = .*|SERVER_URL = "{server_url}"|' ~/pc-monitor-agent.py && sed -i '' 's|API_KEY = .*|API_KEY = "{AGENT_API_KEY}"|' ~/pc-monitor-agent.py && pip3 install psutil websockets speedtest-cli && curl -L -o /tmp/rustdesk.dmg https://github.com/rustdesk/rustdesk/releases/download/1.4.5/rustdesk-1.4.5-x86_64.dmg && hdiutil attach /tmp/rustdesk.dmg && cp -R "/Volumes/RustDesk/RustDesk.app" /Applications/ && hdiutil detach "/Volumes/RustDesk"; python3 ~/pc-monitor-agent.py'''
+    mac_full = f'''curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o ~/pc-monitor-agent.py && sed -i '' 's|SERVER_URL = .*|SERVER_URL = "{server_url}"|' ~/pc-monitor-agent.py && sed -i '' 's|API_KEY = .*|API_KEY = "{AGENT_API_KEY}"|' ~/pc-monitor-agent.py && (pip3 install psutil websockets speedtest-cli 2>/dev/null || pip3 install --user psutil websockets speedtest-cli 2>/dev/null || (python3 -m venv ~/.pc-monitor-venv && ~/.pc-monitor-venv/bin/pip install psutil websockets speedtest-cli)) && curl -L -o /tmp/rustdesk.dmg https://github.com/rustdesk/rustdesk/releases/download/1.4.5/rustdesk-1.4.5-x86_64.dmg && hdiutil attach /tmp/rustdesk.dmg && cp -R "/Volumes/RustDesk/RustDesk.app" /Applications/ && hdiutil detach "/Volumes/RustDesk"; (~/.pc-monitor-venv/bin/python ~/pc-monitor-agent.py 2>/dev/null || python3 ~/pc-monitor-agent.py)'''
 
     # Mac - Agent only
-    mac_agent = f'''curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o ~/pc-monitor-agent.py && sed -i '' 's|SERVER_URL = .*|SERVER_URL = "{server_url}"|' ~/pc-monitor-agent.py && sed -i '' 's|API_KEY = .*|API_KEY = "{AGENT_API_KEY}"|' ~/pc-monitor-agent.py && pip3 install psutil websockets speedtest-cli && python3 ~/pc-monitor-agent.py'''
+    mac_agent = f'''curl -s "{server_url}/install/agent.py?key={AGENT_API_KEY}" -o ~/pc-monitor-agent.py && sed -i '' 's|SERVER_URL = .*|SERVER_URL = "{server_url}"|' ~/pc-monitor-agent.py && sed -i '' 's|API_KEY = .*|API_KEY = "{AGENT_API_KEY}"|' ~/pc-monitor-agent.py && (pip3 install psutil websockets speedtest-cli 2>/dev/null || pip3 install --user psutil websockets speedtest-cli 2>/dev/null || (python3 -m venv ~/.pc-monitor-venv && ~/.pc-monitor-venv/bin/pip install psutil websockets speedtest-cli)) && (~/.pc-monitor-venv/bin/python ~/pc-monitor-agent.py 2>/dev/null || python3 ~/pc-monitor-agent.py)'''
 
     return {
         "server_url": server_url,

@@ -1855,6 +1855,16 @@ if __name__ == "__main__":
     except:
         local_ip = "localhost"
 
+    # Get Tailscale IP if available
+    tailscale_ip = None
+    try:
+        import subprocess
+        result = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            tailscale_ip = result.stdout.strip()
+    except:
+        pass
+
     # Find available port
     port = find_available_port(8000)
     if port is None:
@@ -1869,18 +1879,28 @@ if __name__ == "__main__":
     # Show all admin users
     users_str = ", ".join([f"{u['username']}" for u in ADMIN_USERS])
 
+    # Use Tailscale IP if available, otherwise local IP
+    primary_ip = tailscale_ip if tailscale_ip else local_ip
+
     print(f"""
     +------------------------------------------------------------------+
     |                      PC Monitor Server                           |
     +------------------------------------------------------------------+
-    |  Dashboard:      http://{local_ip}:{port}
+    |  Dashboard:      http://{primary_ip}:{port}
     |  Users:          {users_str}
     |  (passwords in config.json)
     +------------------------------------------------------------------+
-    |  TO ADD COMPUTERS:                                               |
-    |    curl -sL http://{local_ip}:{port}/i | bash                    |
-    |  Or for Windows PowerShell:                                      |
-    |    iwr http://{local_ip}:{port}/i.ps1 | iex                      |
-    +------------------------------------------------------------------+
-    """)
+    |  TO ADD COMPUTERS (use this command):                            |
+    |                                                                  |
+    |    curl -sL http://{primary_ip}:{port}/i | bash
+    |                                                                  |
+    |  Windows PowerShell:                                             |
+    |    iwr http://{primary_ip}:{port}/i.ps1 | iex
+    +------------------------------------------------------------------+""")
+    if tailscale_ip:
+        print(f"    |  Tailscale IP:   {tailscale_ip} (works from anywhere)")
+    if local_ip != primary_ip:
+        print(f"    |  Local IP:       {local_ip} (local network only)")
+    print("    +------------------------------------------------------------------+")
+    print()
     uvicorn.run(app, host="0.0.0.0", port=port)

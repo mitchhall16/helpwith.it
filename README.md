@@ -1,175 +1,364 @@
 # HelpWith.IT - PC Monitor
 
-**Monitor and control all your computers from one place.** See what's running, check performance, browse files, run commands, and remote desktop into any of your machines.
+**Monitor and control all your computers from one dashboard.** Real-time system stats, remote terminal, file browser, speed tests, and one-click remote desktop via RustDesk.
 
 ---
 
-## What Can It Do?
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Server["Server (Your Main PC)"]
+        API[FastAPI Server<br/>:8000]
+        DB[(SQLite DB)]
+        Dashboard[Web Dashboard]
+        API <--> DB
+        API --> Dashboard
+    end
+
+    subgraph Agents["Monitored Computers"]
+        Agent1[Agent<br/>Windows PC]
+        Agent2[Agent<br/>Linux Server]
+        Agent3[Agent<br/>MacBook]
+    end
+
+    subgraph Optional["Optional Services"]
+        InfluxDB[(InfluxDB)]
+        Grafana[Grafana<br/>Historical Graphs]
+        InfluxDB --> Grafana
+    end
+
+    Agent1 <-->|WebSocket<br/>Instant Commands| API
+    Agent2 <-->|WebSocket<br/>Instant Commands| API
+    Agent3 <-->|WebSocket<br/>Instant Commands| API
+
+    Agent1 -->|Heartbeat<br/>System Stats| API
+    Agent2 -->|Heartbeat<br/>System Stats| API
+    Agent3 -->|Heartbeat<br/>System Stats| API
+
+    API -.->|Metrics| InfluxDB
+
+    User((You)) --> Dashboard
+    User -.->|RustDesk| Agent1
+    User -.->|RustDesk| Agent2
+    User -.->|RustDesk| Agent3
+```
+
+---
+
+## How It Works
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant Server
+    participant Dashboard
+    participant You
+
+    Note over Agent,Server: Startup
+    Agent->>Server: Connect WebSocket
+    Server-->>Agent: Connected (instant commands enabled)
+
+    loop Every 60s (configurable)
+        Agent->>Server: Heartbeat (CPU, RAM, Disk, Processes)
+        Server->>Server: Store metrics, check thresholds
+        Server-->>Agent: OK
+    end
+
+    Note over You,Dashboard: You want to run a command
+    You->>Dashboard: Click "Terminal" → type command
+    Dashboard->>Server: POST /api/exec/{id}
+    Server->>Agent: WebSocket: {"command": "shell", "payload": "ls -la"}
+    Agent->>Agent: Execute command
+    Agent->>Server: WebSocket: {"type": "result", "output": "..."}
+    Server-->>Dashboard: Command result
+    Dashboard-->>You: Shows output
+```
+
+---
+
+## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Dashboard** | See all your computers at a glance - CPU, RAM, disk usage |
-| **Remote Desktop** | One-click to control any computer (via RustDesk) |
+| **Live Dashboard** | See all computers at a glance - CPU, RAM, disk, processes |
 | **Remote Terminal** | Run commands on any computer from your browser |
-| **File Browser** | Browse and download files from any computer |
-| **Speed Test** | Test internet speed on any computer |
-| **Alerts** | Get notified when something's wrong |
+| **File Browser** | Browse, download, and upload files remotely |
+| **Speed Tests** | Test internet speed on any computer |
+| **Remote Desktop** | One-click RustDesk connection with saved passwords |
 | **Wake-on-LAN** | Turn on sleeping computers remotely |
+| **Alerts** | Discord/webhook notifications when thresholds exceeded |
+| **Historical Graphs** | Optional InfluxDB + Grafana integration |
+| **Multi-User** | Multiple admin/user accounts with role-based access |
+| **Auto-Update** | Agents automatically update when server has new version |
 
 ---
 
-## How To Install
+## Quick Start
 
-### Step 1: Pick a "Server" Computer
+### Step 1: Start the Server
 
-This is the computer that runs the dashboard. Can be any computer that stays on.
+Pick one computer to be your "server" (the one that hosts the dashboard).
 
-**On Windows:**
-1. Go to [Releases](../../releases) and download `pc-monitor-server.exe`
-2. Double-click to run it
-3. Open your browser to `http://localhost:8000`
-4. Done!
+**Windows:**
+```powershell
+# Download and run
+cd C:\path\to\pc-monitor
+pip install fastapi uvicorn websockets
+python server/server.py
+```
 
-**On Linux:**
-1. Go to [Releases](../../releases) and download `pc-monitor-server-linux`
-2. Open terminal and run:
-   ```
-   cd ~/Downloads
-   chmod +x pc-monitor-server-linux
-   ./pc-monitor-server-linux
-   ```
-3. Open browser to `http://localhost:8000`
+**Linux/Mac:**
+```bash
+cd ~/pc-monitor
+pip install fastapi uvicorn websockets
+python3 server/server.py
+```
 
-**On Mac:**
-1. Go to [Releases](../../releases) and download `pc-monitor-server-mac`
-2. Open terminal and run:
-   ```
-   cd ~/Downloads
-   chmod +x pc-monitor-server-mac
-   ./pc-monitor-server-mac
-   ```
-3. Open browser to `http://localhost:8000`
+The server will display:
+```
++------------------------------------------------------------------+
+|                      PC Monitor Server                           |
++------------------------------------------------------------------+
+|  Dashboard:      http://192.168.1.100:8000
+|  Users:          admin
+|  (passwords in config.json)
++------------------------------------------------------------------+
+```
+
+Open the dashboard URL in your browser. Login credentials are in `config.json`.
 
 ---
 
 ### Step 2: Add Computers to Monitor
 
-On each computer you want to monitor:
+On each computer you want to monitor, run ONE command:
 
-**On Windows:**
-1. Go to [Releases](../../releases) and download `pc-monitor-agent.exe`
-2. Double-click to run it
-3. Enter your server's address when asked (like `http://192.168.1.100:8000`)
-4. Done! The computer will appear in your dashboard
+**Linux/Mac:**
+```bash
+curl -sL http://YOUR_SERVER_IP:8000/i | bash
+```
 
-**On Linux:**
-1. Go to [Releases](../../releases) and download `pc-monitor-agent-linux`
-2. Open terminal and run:
-   ```
-   cd ~/Downloads
-   chmod +x pc-monitor-agent-linux
-   ./pc-monitor-agent-linux http://YOUR_SERVER_IP:8000
-   ```
+**Windows (PowerShell):**
+```powershell
+iwr http://YOUR_SERVER_IP:8000/i.ps1 | iex
+```
 
-**On Mac:**
-1. Go to [Releases](../../releases) and download `pc-monitor-agent-mac`
-2. Open terminal and run:
-   ```
-   cd ~/Downloads
-   chmod +x pc-monitor-agent-mac
-   ./pc-monitor-agent-mac http://YOUR_SERVER_IP:8000
-   ```
+Replace `YOUR_SERVER_IP` with your server's IP address (shown when server starts).
+
+The agent will:
+1. Download and configure itself automatically
+2. Connect to your server
+3. Appear in the dashboard within seconds
 
 ---
 
 ### Step 3: Set Up Remote Desktop (Optional)
 
-To remotely control your computers:
+For one-click remote control:
 
-1. Download [RustDesk](https://rustdesk.com) on each computer
-2. Install and open it once
-3. In the dashboard, click on a computer → **Connect** tab
-4. Click **"Setup One-Click Password"**
-5. Now you can click **"Remote"** to instantly connect!
+1. Install [RustDesk](https://rustdesk.com) on each computer (free, open source)
+2. In the dashboard, click a computer → **Connect** tab
+3. Click **"Setup One-Click Password"** to save the password
+4. Now click **"Remote"** to instantly connect!
 
 ---
 
-## FAQ
+## Configuration
 
-**Q: What's the server address?**
-Look at the computer running the server. It shows the address like:
+### Server Config (`config.json`)
+
+Auto-generated on first run:
+
+```json
+{
+  "admin_username": "admin",
+  "admin_password": "auto-generated",
+  "agent_api_key": "auto-generated",
+  "heartbeat_interval": 60,
+  "influxdb_url": "",
+  "influxdb_token": "",
+  "influxdb_org": "pc-monitor",
+  "influxdb_bucket": "pc-metrics"
+}
 ```
-Dashboard: http://192.168.1.100:8000
+
+| Setting | Description |
+|---------|-------------|
+| `admin_username` | Dashboard login username |
+| `admin_password` | Dashboard login password |
+| `agent_api_key` | Secret key agents use to authenticate |
+| `heartbeat_interval` | How often agents report stats (seconds) |
+| `influxdb_*` | Optional: Enable historical graphs |
+
+### Agent Configuration
+
+Agents are auto-configured when downloaded from the server. Manual config:
+
+```python
+SERVER_URL = "http://192.168.1.100:8000"
+API_KEY = "your-api-key-from-config.json"
+HEARTBEAT_INTERVAL = 60
 ```
-Use that address.
-
-**Q: I can't connect from another computer**
-- Make sure both computers are on the same network
-- Check Windows Firewall isn't blocking it
-- Try the IP address, not "localhost"
-
-**Q: How do I find my server's IP address?**
-- Windows: Open CMD, type `ipconfig`, look for "IPv4 Address"
-- Linux/Mac: Open terminal, type `ip addr` or `ifconfig`
-
-**Q: Can I access this from outside my home?**
-Yes! Use [Tailscale](https://tailscale.com) (free) to connect your computers. Then use the Tailscale IP address.
-
-**Q: How do I make it start automatically?**
-The installer has an option "Start automatically on Windows startup" - check that box.
 
 ---
 
-## Screenshots
+## Running as a Service
 
-*Coming soon*
+### Windows (Auto-start on Boot)
 
----
+**Server:**
+```batch
+install-service-windows.bat
+```
 
-## Need Help?
+**Agent:** The installer prompts to add to Windows startup.
 
-- [Report a bug](../../issues)
-- [Ask a question](../../discussions)
+### Linux (systemd)
 
----
-
-## For Developers
-
-<details>
-<summary>Click to expand technical details</summary>
-
-### Run from Source
+**Server:**
 ```bash
-# Server
-cd server
-pip install fastapi uvicorn websockets
-python server.py
-
-# Agent
-cd agent
-pip install psutil websockets speedtest-cli
-python agent.py
+sudo ./install-service-linux.sh
 ```
 
-### Build Executables
+**Agent:** The install script (`curl ... | bash`) offers to install as a service.
+
+Or manually:
 ```bash
-# Windows
-build-windows.bat
+sudo tee /etc/systemd/system/pc-monitor-agent.service << EOF
+[Unit]
+Description=PC Monitor Agent
+After=network.target
 
-# Linux
-./build-linux.sh
+[Service]
+ExecStart=/usr/bin/python3 /path/to/agent.py
+Restart=always
+RestartSec=10
 
-# Mac
-./build-mac.sh
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable --now pc-monitor-agent
 ```
 
-### Tech Stack
+---
+
+## Optional: Historical Graphs with Grafana
+
+For pretty graphs showing metrics over time:
+
+```bash
+cd pc-monitor
+docker-compose up -d
+```
+
+This starts:
+- **InfluxDB** on port 8086 (time-series database)
+- **Grafana** on port 3000 (visualization)
+
+Then update `config.json`:
+```json
+{
+  "influxdb_url": "http://localhost:8086",
+  "influxdb_token": "pc-monitor-super-secret-token",
+  "influxdb_org": "pc-monitor",
+  "influxdb_bucket": "pc-metrics"
+}
+```
+
+Access Grafana at `http://localhost:3000` (admin/admin).
+
+---
+
+## API Reference
+
+All API endpoints require HTTP Basic Auth (except agent endpoints which use API key).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/computers` | GET | List all computers |
+| `/api/computers/{id}` | DELETE | Remove a computer |
+| `/api/computers/{id}/rename` | PUT | Rename a computer |
+| `/api/exec/{id}` | POST | Run command on computer |
+| `/api/files/{id}/browse` | POST | Browse directory |
+| `/api/files/{id}/download` | POST | Download file |
+| `/api/speedtest/{id}` | POST | Run speed test |
+| `/api/wake/{id}` | POST | Send Wake-on-LAN |
+| `/api/alerts` | GET | Get active alerts |
+| `/api/settings` | GET/PUT | Manage settings |
+| `/metrics` | GET | Prometheus metrics |
+
+---
+
+## Troubleshooting
+
+### Agent can't connect to server?
+- Check firewall allows port 8000 (both computers)
+- Verify the server IP is correct (not `localhost`)
+- Ensure server is running
+
+### No CPU/memory stats?
+```bash
+pip install psutil
+```
+
+### Dashboard not updating?
+- Check agent is running (look for heartbeat messages)
+- Refresh the browser page
+- Check the WebSocket connection in agent output
+
+### Multiple agent instances running?
+- Dashboard shows warning if duplicates detected
+- Click "Kill Duplicates" or use the restart command
+
+### How to find server IP?
+- **Windows:** `ipconfig` → look for IPv4 Address
+- **Linux/Mac:** `ip addr` or `ifconfig`
+
+### Access from outside home network?
+Use [Tailscale](https://tailscale.com) (free) to create a secure tunnel. Then use the Tailscale IP address.
+
+---
+
+## Project Structure
+
+```
+pc-monitor/
+├── server/
+│   └── server.py          # FastAPI server + dashboard
+├── agent/
+│   └── agent.py           # Monitoring agent
+├── dashboard/
+│   └── index.html         # Web interface
+├── grafana/
+│   ├── docker-compose.yml # InfluxDB + Grafana
+│   └── provisioning/      # Grafana datasources
+├── config.json            # Server configuration (auto-generated)
+├── pc_monitor.db          # SQLite database
+└── install-scripts/       # Generated install scripts
+```
+
+---
+
+## Tech Stack
+
 - **Server:** Python, FastAPI, WebSockets, SQLite
-- **Dashboard:** Vanilla HTML/CSS/JS
-- **Agent:** Python, psutil
-
-</details>
+- **Dashboard:** Vanilla HTML/CSS/JavaScript
+- **Agent:** Python, psutil, websockets
+- **Optional:** InfluxDB, Grafana, Docker
 
 ---
 
-**License:** MIT (free to use and modify)
+## License
+
+MIT - Free to use and modify.
+
+---
+
+## Links
+
+- [Report a Bug](../../issues)
+- [Ask a Question](../../discussions)
+- [RustDesk](https://rustdesk.com) - Free remote desktop
+- [Tailscale](https://tailscale.com) - Free secure networking

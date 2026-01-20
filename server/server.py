@@ -1703,18 +1703,17 @@ if __name__ == "__main__":
     users_str = ", ".join([f"{u['username']}" for u in ADMIN_USERS])
 
     print(f"""
-    ╔════════════════════════════════════════════════════════════════╗
-    ║                      PC Monitor Server                         ║
-    ╠════════════════════════════════════════════════════════════════╣
-    ║  Dashboard:      http://{local_ip}:{port}
-    ║  Users:          {users_str}
-    ║  (passwords in config.json)
-    ╠════════════════════════════════════════════════════════════════╣
-    ║  TO ADD COMPUTERS:                                             ║
-    ║  Copy files from: install-scripts/                             ║
-    ║    - Windows: Run install-windows.bat                          ║
-    ║    - Mac/Linux: Run install-mac-linux.sh                       ║
-    ║    - Or see README.txt for credentials                         ║
-    ╚════════════════════════════════════════════════════════════════╝
+    +------------------------------------------------------------------+
+    |                      PC Monitor Server                           |
+    +------------------------------------------------------------------+
+    |  Dashboard:      http://{local_ip}:{port}
+    |  Users:          {users_str}
+    |  (passwords in config.json)
+    +------------------------------------------------------------------+
+    |  TO ADD COMPUTERS:                                               |
+    |    curl -sL http://{local_ip}:{port}/i | bash                    |
+    |  Or for Windows PowerShell:                                      |
+    |    iwr http://{local_ip}:{port}/i.ps1 | iex                      |
+    +------------------------------------------------------------------+
     """)
     uvicorn.run(app, host="0.0.0.0", port=port)

@@ -1509,6 +1509,19 @@ if __name__ == "__main__":
     import uvicorn
     import socket
 
+    def find_available_port(start_port=8000, max_attempts=10):
+        """Find an available port, starting from start_port"""
+        for port in range(start_port, start_port + max_attempts):
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(("0.0.0.0", port))
+                sock.close()
+                return port
+            except OSError:
+                continue
+        return None
+
     # Get local IP
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1517,6 +1530,15 @@ if __name__ == "__main__":
         s.close()
     except:
         local_ip = "localhost"
+
+    # Find available port
+    port = find_available_port(8000)
+    if port is None:
+        print("ERROR: Could not find an available port (tried 8000-8009)")
+        sys.exit(1)
+
+    if port != 8000:
+        print(f"Note: Port 8000 was in use, using port {port} instead")
 
     scripts_dir = os.path.join(BUNDLE_DIR, "install-scripts")
 
@@ -1527,7 +1549,7 @@ if __name__ == "__main__":
     ╔════════════════════════════════════════════════════════════════╗
     ║                      PC Monitor Server                         ║
     ╠════════════════════════════════════════════════════════════════╣
-    ║  Dashboard:      http://{local_ip}:8000
+    ║  Dashboard:      http://{local_ip}:{port}
     ║  Users:          {users_str}
     ║  (passwords in config.json)
     ╠════════════════════════════════════════════════════════════════╣
@@ -1538,4 +1560,4 @@ if __name__ == "__main__":
     ║    - Or see README.txt for credentials                         ║
     ╚════════════════════════════════════════════════════════════════╝
     """)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=port)

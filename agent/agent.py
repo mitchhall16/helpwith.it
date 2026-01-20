@@ -5,7 +5,7 @@ Sends heartbeats with system info to the central server.
 Uses WebSockets for instant command response!
 """
 
-AGENT_VERSION = "1.4.5"  # Increment this when updating the agent
+AGENT_VERSION = "1.4.6"  # Increment this when updating the agent
 
 import platform
 import socket
@@ -1015,6 +1015,24 @@ def websocket_listener():
 
         time.sleep(3)  # Reconnect after 3 seconds
 
+def sync_settings_from_server():
+    """Fetch settings from server and apply them"""
+    global HEARTBEAT_INTERVAL
+    try:
+        url = f"{SERVER_URL}/api/agent/settings?key={API_KEY}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'PC-Monitor-Agent'})
+        response = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(response.read().decode('utf-8'))
+
+        new_interval = data.get('heartbeat_interval', HEARTBEAT_INTERVAL)
+        if new_interval != HEARTBEAT_INTERVAL:
+            print(f"[{time.strftime('%H:%M:%S')}] Settings sync: heartbeat interval changed {HEARTBEAT_INTERVAL}s -> {new_interval}s")
+            HEARTBEAT_INTERVAL = new_interval
+        return True
+    except Exception as e:
+        # Silent fail - don't spam logs
+        return False
+
 def check_for_updates():
     """Check if a new version is available and auto-update if enabled"""
     if not AUTO_UPDATE:
@@ -1102,8 +1120,12 @@ def main():
 
     last_heartbeat = 0
     last_update_check = 0
+    last_settings_sync = 0
+    SETTINGS_SYNC_INTERVAL = 300  # Sync settings every 5 minutes
 
-    # Check for updates on startup
+    # Sync settings and check for updates on startup
+    print(f"[{time.strftime('%H:%M:%S')}] Syncing settings from server...")
+    sync_settings_from_server()
     if AUTO_UPDATE:
         print(f"[{time.strftime('%H:%M:%S')}] Checking for updates...")
         check_for_updates()
@@ -1116,8 +1138,13 @@ def main():
             success = send_heartbeat()
             status = "OK" if success else "FAILED"
             ws_status = "WebSocket" if ws_connected else "Polling"
-            print(f"[{time.strftime('%H:%M:%S')}] Heartbeat: {status} | Mode: {ws_status}")
+            print(f"[{time.strftime('%H:%M:%S')}] Heartbeat: {status} | Mode: {ws_status} | Interval: {HEARTBEAT_INTERVAL}s")
             last_heartbeat = current_time
+
+        # Sync settings periodically
+        if current_time - last_settings_sync >= SETTINGS_SYNC_INTERVAL:
+            sync_settings_from_server()
+            last_settings_sync = current_time
 
         # Check for updates periodically
         if AUTO_UPDATE and current_time - last_update_check >= AUTO_UPDATE_INTERVAL:

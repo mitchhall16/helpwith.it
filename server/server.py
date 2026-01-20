@@ -1145,6 +1145,16 @@ async def get_heartbeat_interval(username: str = Depends(verify_credentials)):
     """Get heartbeat interval setting"""
     return {"heartbeat_interval": HEARTBEAT_INTERVAL}
 
+@app.get("/api/agent/settings")
+async def get_agent_settings(key: str = ""):
+    """Get settings for agents (no auth required, but needs API key)"""
+    if key != AGENT_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return {
+        "heartbeat_interval": HEARTBEAT_INTERVAL,
+        "auto_update": True
+    }
+
 @app.put("/api/config/heartbeat")
 async def set_heartbeat_interval(request: Request, username: str = Depends(verify_credentials)):
     """Set heartbeat interval (in seconds). Agents will use this when they're installed."""

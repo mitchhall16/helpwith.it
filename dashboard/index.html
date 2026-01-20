@@ -900,6 +900,7 @@
                         </div>
                         <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
                             <input type="password" id="rustdesk-pw-card-${pc.id}" value="${pc.extra?.rustdesk_password || ''}" placeholder="RustDesk password" style="font-size: 0.8rem; flex: 1;">
+                            <button class="btn" style="font-size: 0.8rem; padding: 0.4rem;" onclick="togglePasswordVisibility('rustdesk-pw-card-${pc.id}')" title="Show/Hide">👁</button>
                             <button class="btn" style="font-size: 0.8rem;" onclick="saveRustDeskPassword('${pc.id}', 'card')">Save</button>
                         </div>
                         ` : `
@@ -1151,6 +1152,7 @@
                             </div>
                             <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
                                 <input type="password" id="rustdesk-password-${pc.id}" value="${pc.extra?.rustdesk_password || ''}" placeholder="RustDesk password" style="font-size: 0.75rem; flex: 1;">
+                                <button class="btn" style="font-size: 0.75rem; padding: 0.3rem;" onclick="togglePasswordVisibility('rustdesk-password-${pc.id}')" title="Show/Hide">👁</button>
                                 <button class="btn" style="font-size: 0.75rem;" onclick="saveRustDeskPassword('${pc.id}')">Save</button>
                             </div>
                             <span style="font-size: 0.65rem; color: var(--text-muted);">Set password here to match what's in RustDesk</span>
@@ -1280,6 +1282,11 @@
             } catch (e) {
                 alert('Failed to set password: ' + e.message);
             }
+        }
+
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            input.type = input.type === 'password' ? 'text' : 'password';
         }
 
         async function saveRustDeskPassword(id, source) {

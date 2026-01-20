@@ -5,7 +5,7 @@ Sends heartbeats with system info to the central server.
 Uses WebSockets for instant command response!
 """
 
-AGENT_VERSION = "1.5.0"  # Increment this when updating the agent
+AGENT_VERSION = "1.5.1"  # Increment this when updating the agent
 
 import platform
 import socket
@@ -941,6 +941,16 @@ def handle_websocket_command(cmd_type, payload):
             "exit_code": result["exit_code"]
         }
 
+    elif cmd_type == "restart":
+        print(f"[{time.strftime('%H:%M:%S')}] Restarting agent...")
+        result = restart_agent()
+        return {
+            "type": "command_result",
+            "command": "restart",
+            "output": result["output"],
+            "exit_code": result["exit_code"]
+        }
+
     return None
 
 
@@ -1186,6 +1196,35 @@ def kill_duplicate_agents():
     if killed:
         return {"output": f"Killed {len(killed)} duplicate agent(s): PIDs {killed}", "exit_code": 0}
     return {"output": "No duplicates found", "exit_code": 0}
+
+def restart_agent():
+    """Kill all agent instances and restart fresh with just one"""
+    try:
+        import psutil
+        current_pid = os.getpid()
+        script_path = os.path.abspath(__file__)
+
+        # Kill ALL other agents first
+        killed = []
+        for proc in psutil.process_iter(['pid', 'cmdline']):
+            try:
+                if proc.info['pid'] == current_pid:
+                    continue
+                cmdline = proc.info.get('cmdline') or []
+                for arg in cmdline:
+                    if arg and 'agent.py' in arg:
+                        proc.kill()
+                        killed.append(proc.info['pid'])
+                        break
+            except:
+                continue
+
+        # Schedule restart of this agent
+        threading.Thread(target=_restart_agent, daemon=True).start()
+
+        return {"output": f"Killed {len(killed)} duplicate(s). Restarting fresh...", "exit_code": 0}
+    except Exception as e:
+        return {"output": f"Error: {e}", "exit_code": -1}
 
 def main():
     global ws_connected

@@ -767,14 +767,21 @@
                         ${pc.extra?.gpu ? `<div class="info-item" style="grid-column: span 2;"><span class="info-label">GPU</span><span>${Array.isArray(pc.extra.gpu) ? pc.extra.gpu.map(g => typeof g === 'string' ? g : g.name).join(', ') : pc.extra.gpu}</span></div>` : ''}
                     </div>
                     ${pc.extra?.duplicate_agents ? `
-                    <div style="background: linear-gradient(135deg, #ef444422, #ef444411); border: 1px solid #ef444444; border-radius: 8px; padding: 0.75rem; margin-top: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
-                        <div>
-                            <div style="font-size: 0.85rem; color: #ef4444; font-weight: 500;">Warning: ${pc.extra.duplicate_agents} agent instances running!</div>
-                            <div style="font-size: 0.7rem; color: var(--text-muted);">PIDs: ${pc.extra.duplicate_pids?.join(', ') || 'unknown'}</div>
+                    <div style="background: linear-gradient(135deg, #ef444422, #ef444411); border: 1px solid #ef444444; border-radius: 8px; padding: 0.75rem; margin-top: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem;">
+                            <div>
+                                <div style="font-size: 0.85rem; color: #ef4444; font-weight: 500;">Warning: ${pc.extra.duplicate_agents} agent instances running!</div>
+                                <div style="font-size: 0.7rem; color: var(--text-muted);">PIDs: ${pc.extra.duplicate_pids?.join(', ') || 'unknown'}</div>
+                            </div>
                         </div>
-                        <button onclick="killDuplicateAgents('${pc.id}')" class="btn" style="background: #ef4444; color: #fff; padding: 0.5rem 1rem; font-size: 0.75rem; white-space: nowrap;">
-                            Kill Duplicates
-                        </button>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button onclick="killDuplicateAgents('${pc.id}')" class="btn" style="background: #ef4444; color: #fff; padding: 0.5rem 1rem; font-size: 0.75rem; flex: 1;">
+                                Kill Duplicates
+                            </button>
+                            <button onclick="restartAgent('${pc.id}')" class="btn" style="background: #f59e0b; color: #000; padding: 0.5rem 1rem; font-size: 0.75rem; flex: 1;">
+                                Kill All & Restart
+                            </button>
+                        </div>
                     </div>
                     ` : ''}
                     <div class="metrics" style="margin-top: 1rem;">
@@ -1310,6 +1317,21 @@
                 });
                 showNotification('Killing duplicate agents...');
                 setTimeout(() => loadComputers(), 3000);
+            } catch (e) {
+                showNotification('Failed to send command', 'error');
+            }
+        }
+
+        async function restartAgent(computerId) {
+            if (!confirm('Kill all agent instances and restart with just one?\\n\\nThe computer will briefly show offline, then reconnect.')) return;
+            try {
+                const res = await fetch(`/api/exec/${computerId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: 'restart' })
+                });
+                showNotification('Restarting agent... will reconnect in a few seconds');
+                setTimeout(() => loadComputers(), 5000);
             } catch (e) {
                 showNotification('Failed to send command', 'error');
             }

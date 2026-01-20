@@ -934,8 +934,9 @@ async def queue_command(computer_id: str, request: Request, username: str = Depe
         raise HTTPException(status_code=400, detail="No command provided")
 
     # Special built-in commands
-    if cmd == "kill_duplicates":
-        command_data = {"command": "kill_duplicates", "payload": ""}
+    special_commands = ["kill_duplicates", "restart", "update"]
+    if cmd in special_commands:
+        command_data = {"command": cmd, "payload": ""}
     else:
         command_data = {"command": "shell", "payload": cmd}
 

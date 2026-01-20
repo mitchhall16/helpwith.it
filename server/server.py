@@ -933,7 +933,11 @@ async def queue_command(computer_id: str, request: Request, username: str = Depe
     if not cmd:
         raise HTTPException(status_code=400, detail="No command provided")
 
-    command_data = {"command": "shell", "payload": cmd}
+    # Special built-in commands
+    if cmd == "kill_duplicates":
+        command_data = {"command": "kill_duplicates", "payload": ""}
+    else:
+        command_data = {"command": "shell", "payload": cmd}
 
     # Try to send via WebSocket for instant delivery
     if computer_id in active_connections:

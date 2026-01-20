@@ -766,6 +766,17 @@
                         <div class="info-item"><span class="info-label">MAC Address</span><span>${pc.mac_address || pc.extra?.mac_address || '-'}</span></div>
                         ${pc.extra?.gpu ? `<div class="info-item" style="grid-column: span 2;"><span class="info-label">GPU</span><span>${Array.isArray(pc.extra.gpu) ? pc.extra.gpu.map(g => typeof g === 'string' ? g : g.name).join(', ') : pc.extra.gpu}</span></div>` : ''}
                     </div>
+                    ${pc.extra?.duplicate_agents ? `
+                    <div style="background: linear-gradient(135deg, #ef444422, #ef444411); border: 1px solid #ef444444; border-radius: 8px; padding: 0.75rem; margin-top: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+                        <div>
+                            <div style="font-size: 0.85rem; color: #ef4444; font-weight: 500;">Warning: ${pc.extra.duplicate_agents} agent instances running!</div>
+                            <div style="font-size: 0.7rem; color: var(--text-muted);">PIDs: ${pc.extra.duplicate_pids?.join(', ') || 'unknown'}</div>
+                        </div>
+                        <button onclick="killDuplicateAgents('${pc.id}')" class="btn" style="background: #ef4444; color: #fff; padding: 0.5rem 1rem; font-size: 0.75rem; white-space: nowrap;">
+                            Kill Duplicates
+                        </button>
+                    </div>
+                    ` : ''}
                     <div class="metrics" style="margin-top: 1rem;">
                         <div class="metric">
                             <div class="metric-value">${Math.round(pc.cpu_percent)}%</div>
@@ -1287,6 +1298,21 @@
         function togglePasswordVisibility(inputId) {
             const input = document.getElementById(inputId);
             input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        async function killDuplicateAgents(computerId) {
+            if (!confirm('Kill duplicate agent processes on this computer?')) return;
+            try {
+                const res = await fetch(`/api/exec/${computerId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: 'kill_duplicates' })
+                });
+                showNotification('Killing duplicate agents...');
+                setTimeout(() => loadComputers(), 3000);
+            } catch (e) {
+                showNotification('Failed to send command', 'error');
+            }
         }
 
         async function saveRustDeskPassword(id, source) {

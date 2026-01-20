@@ -5,7 +5,7 @@ Sends heartbeats with system info to the central server.
 Uses WebSockets for instant command response!
 """
 
-AGENT_VERSION = "1.4.9"  # Increment this when updating the agent
+AGENT_VERSION = "1.5.0"  # Increment this when updating the agent
 
 import platform
 import socket
@@ -625,6 +625,12 @@ def get_system_info():
         # Top processes
         info["extra"]["top_processes"] = get_top_processes(10)
 
+        # Check for duplicate agents
+        instance_count, duplicate_pids = count_agent_instances()
+        if instance_count > 1:
+            info["extra"]["duplicate_agents"] = instance_count
+            info["extra"]["duplicate_pids"] = duplicate_pids
+
     except ImportError:
         print("Note: Install psutil for detailed metrics: pip install psutil")
 
@@ -925,6 +931,16 @@ def handle_websocket_command(cmd_type, payload):
             "exit_code": result["exit_code"]
         }
 
+    elif cmd_type == "kill_duplicates":
+        print(f"[{time.strftime('%H:%M:%S')}] Killing duplicate agents...")
+        result = kill_duplicate_agents()
+        return {
+            "type": "command_result",
+            "command": "kill_duplicates",
+            "output": result["output"],
+            "exit_code": result["exit_code"]
+        }
+
     return None
 
 
@@ -1116,27 +1132,60 @@ def check_for_updates():
         return False
 
 
-def check_already_running():
-    """Check if another agent instance is already running"""
+def count_agent_instances():
+    """Count how many agent instances are running (including this one)"""
+    count = 0
+    pids = []
     try:
         import psutil
         current_pid = os.getpid()
-        current_script = os.path.abspath(__file__)
+
+        for proc in psutil.process_iter(['pid', 'cmdline']):
+            try:
+                cmdline = proc.info.get('cmdline') or []
+                # Check if python process is running agent.py
+                for arg in cmdline:
+                    if arg and 'agent.py' in arg:
+                        count += 1
+                        if proc.info['pid'] != current_pid:
+                            pids.append(proc.info['pid'])
+                        break
+            except:
+                continue
+    except:
+        pass
+    return count, pids
+
+def check_already_running():
+    """Check if another agent instance is already running"""
+    count, _ = count_agent_instances()
+    return count > 1
+
+def kill_duplicate_agents():
+    """Kill other agent instances (not this one)"""
+    killed = []
+    try:
+        import psutil
+        current_pid = os.getpid()
 
         for proc in psutil.process_iter(['pid', 'cmdline']):
             try:
                 if proc.info['pid'] == current_pid:
                     continue
                 cmdline = proc.info.get('cmdline') or []
-                # Check if another python process is running agent.py
                 for arg in cmdline:
                     if arg and 'agent.py' in arg:
-                        return True
+                        proc.kill()
+                        killed.append(proc.info['pid'])
+                        break
             except:
                 continue
-    except:
-        pass
-    return False
+    except Exception as e:
+        return {"output": f"Error: {e}", "exit_code": -1}
+
+    if killed:
+        return {"output": f"Killed {len(killed)} duplicate agent(s): PIDs {killed}", "exit_code": 0}
+    return {"output": "No duplicates found", "exit_code": 0}
 
 def main():
     global ws_connected

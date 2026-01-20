@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+
+# Build outputs
+dist/
+build/
+*.spec
+*.exe
+*.app
+
+# Database
+*.db
+*.sqlite
+
+# Config (contains secrets)
+config.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Installer temp
+*.zip
+nssm.exe
+
+# Logs
+*.log

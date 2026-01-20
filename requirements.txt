@@ -1,0 +1,9 @@
+# Server dependencies
+fastapi==0.109.0
+uvicorn==0.27.0
+
+# Agent dependencies (optional but recommended)
+psutil==5.9.8
+
+# For Prometheus/Grafana integration (optional)
+prometheus-client==0.19.0

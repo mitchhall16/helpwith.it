@@ -1,0 +1,56 @@
+# PC Monitor - InfluxDB + Grafana Stack
+#
+# Quick Start:
+#   docker-compose up -d
+#
+# Access:
+#   - Grafana:  http://localhost:3000 (admin/admin)
+#   - InfluxDB: http://localhost:8086
+
+version: '3.8'
+
+services:
+  # ============================================
+  # InfluxDB - Time-series database for metrics
+  # ============================================
+  influxdb:
+    image: influxdb:2.7
+    container_name: pc-monitor-influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=pcmonitor123
+      - DOCKER_INFLUXDB_INIT_ORG=pc-monitor
+      - DOCKER_INFLUXDB_INIT_BUCKET=pc-metrics
+      - DOCKER_INFLUXDB_INIT_RETENTION=30d
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=pc-monitor-super-secret-token
+    restart: unless-stopped
+
+  # ============================================
+  # Grafana - Visualization dashboards
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pc-monitor-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - influxdb
+    restart: unless-stopped
+
+volumes:
+  influxdb-data:
+  influxdb-config:
+  grafana-data:

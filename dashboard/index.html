@@ -1,0 +1,3122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC Monitor Dashboard</title>
+    <!-- Chart.js for beautiful graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <!-- Leaflet for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #3b82f6;
+            --success: #22c55e;
+            --warning: #eab308;
+            --danger: #ef4444;
+            --border: #334155;
+        }
+
+        .light-theme {
+            --bg-primary: #f1f5f9;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+            --border: #cbd5e1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 1.5rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1600px;
+            margin: 0 auto 1.5rem;
+        }
+
+        h1 { font-size: 1.75rem; }
+
+        .header-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .theme-toggle {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .alerts-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            display: none;
+        }
+
+        .alerts-btn.has-alerts {
+            display: block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat { text-align: center; }
+        .stat-value { font-size: 1.75rem; font-weight: bold; }
+        .stat-label { color: var(--text-muted); font-size: 0.875rem; }
+        .online { color: var(--success); }
+        .offline { color: var(--danger); }
+
+        .groups-container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .group {
+            margin-bottom: 2rem;
+        }
+
+        .group-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .group-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .group-count {
+            background: var(--bg-tertiary);
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .computer-name {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-online { background: #166534; color: #22c55e; }
+        .status-offline { background: #7f1d1d; color: #ef4444; }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.35rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .info-label { color: var(--text-muted); }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin: 0.75rem 0;
+        }
+
+        .metric {
+            text-align: center;
+            padding: 0.5rem;
+            background: var(--bg-primary);
+            border-radius: 6px;
+        }
+
+        .metric-value { font-size: 1.1rem; font-weight: bold; }
+        .metric-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
+
+        .progress-bar {
+            width: 100%;
+            height: 3px;
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+            margin-top: 0.2rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+
+        .progress-low { background: var(--success); }
+        .progress-medium { background: var(--warning); }
+        .progress-high { background: var(--danger); }
+
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.4rem 0.75rem;
+            border-radius: 5px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background 0.2s;
+        }
+
+        .btn:hover { background: var(--bg-tertiary); }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: var(--success); border-color: var(--success); color: white; }
+        .btn-danger { background: var(--danger); border-color: var(--danger); color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .notes {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal.active { display: flex; }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 12px;
+            max-width: 1100px;
+            width: 95%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-content.large {
+            max-width: 1400px;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .details-section {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .details-section h3 {
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 1rem;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+            overflow-x: auto;
+            white-space: nowrap;
+            scrollbar-width: none;
+        }
+
+        .tab-bar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tab {
+            padding: 0.4rem 0.7rem;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+
+        .tab:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .process-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .process-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+
+        .process-name { flex: 1; }
+        .process-stat { width: 60px; text-align: right; }
+
+        .disk-item {
+            padding: 0.5rem;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+
+        .disk-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        textarea { resize: vertical; min-height: 80px; }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .alert-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border-left: 3px solid var(--danger);
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .refresh-info {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .terminal {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 1rem;
+            border-radius: 6px;
+            min-height: 150px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+        }
+
+        .terminal-input {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .terminal-input input {
+            flex: 1;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>PC Monitor</h1>
+        <div class="header-controls">
+            <button class="btn btn-primary" onclick="showAddComputer()">+ Add</button>
+            <button class="btn" onclick="showClusterView()">Cluster</button>
+            <button class="btn" onclick="showAllGraphs()">Graphs</button>
+            <button class="btn" onclick="showMapView()">Map</button>
+            <button class="btn" onclick="showAllDiagnostics()">Logs</button>
+            <button class="alerts-btn" id="alerts-btn" onclick="showAlerts()">
+                <span id="alerts-count">0</span> Alerts
+            </button>
+            <button class="btn" id="settings-btn" onclick="showGlobalSettings()" style="position: relative;">Settings<span id="update-badge" style="display: none; position: absolute; top: -5px; right: -5px; background: var(--danger); color: white; font-size: 0.65rem; padding: 2px 5px; border-radius: 10px;">!</span></button>
+            <button class="theme-toggle" onclick="toggleTheme()">Theme</button>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat">
+            <div class="stat-value" id="total-count">-</div>
+            <div class="stat-label">Total</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value online" id="online-count">-</div>
+            <div class="stat-label">Online</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value offline" id="offline-count">-</div>
+            <div class="stat-label">Offline</div>
+        </div>
+    </div>
+
+    <div class="groups-container" id="groups-container">
+        <div class="empty-state">
+            <h2>No computers yet</h2>
+            <p>Install the agent on your computers to start monitoring.</p>
+        </div>
+    </div>
+
+    <p class="refresh-info">Auto-refreshes every 30 seconds | Login: admin/admin</p>
+
+    <!-- Details Modal -->
+    <div class="modal" id="details-modal">
+        <div class="modal-content" id="modal-container" style="max-width: 850px;">
+            <div class="modal-header">
+                <h2 id="modal-title">Computer Details</h2>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button class="btn" id="view-toggle-btn" onclick="toggleViewMode()">Grid View</button>
+                    <button class="modal-close" onclick="closeModal('details-modal')">&times;</button>
+                </div>
+            </div>
+            <div class="tab-bar" id="tab-bar" style="display: none;">
+                <button class="tab active" onclick="showTab('overview')">Overview</button>
+                <button class="tab" onclick="showTab('terminal')">Terminal</button>
+                <button class="tab" onclick="showTab('files')">Files</button>
+                <button class="tab" onclick="showTab('network')">Network</button>
+                <button class="tab" onclick="showTab('processes')">Processes</button>
+                <button class="tab" onclick="showTab('disks')">Disks</button>
+                <button class="tab" onclick="showTab('diagnostics')">Diagnostics</button>
+                <button class="tab" onclick="showTab('connect')">Connect</button>
+                <button class="tab" onclick="showTab('settings')">Settings</button>
+            </div>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Alerts Modal -->
+    <div class="modal" id="alerts-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Alerts</h2>
+                <button class="modal-close" onclick="closeModal('alerts-modal')">&times;</button>
+            </div>
+            <div id="alerts-body"></div>
+        </div>
+    </div>
+
+    <!-- Global Settings Modal -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Global Settings</h2>
+                <button class="modal-close" onclick="closeModal('settings-modal')">&times;</button>
+            </div>
+            <div id="settings-body">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Add Computer Modal -->
+    <div class="modal" id="add-computer-modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2>Add New Computer</h2>
+                <button class="modal-close" onclick="closeModal('add-computer-modal')">&times;</button>
+            </div>
+            <div id="add-computer-body">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Cluster View Modal -->
+    <div class="modal" id="cluster-modal">
+        <div class="modal-content large" style="max-width: 1400px;">
+            <div class="modal-header">
+                <h2>Cluster Overview</h2>
+                <button class="modal-close" onclick="closeModal('cluster-modal')">&times;</button>
+            </div>
+            <div id="cluster-body">Loading...</div>
+        </div>
+    </div>
+
+    <!-- All Graphs Modal -->
+    <div class="modal" id="graphs-modal">
+        <div class="modal-content large" style="max-width: 1400px;">
+            <div class="modal-header">
+                <h2>All Graphs</h2>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <select id="all-graphs-range" onchange="loadAllGraphs()" style="padding: 0.4rem;">
+                        <option value="1">Last 1 hour</option>
+                        <option value="6">Last 6 hours</option>
+                        <option value="24" selected>Last 24 hours</option>
+                        <option value="168">Last 7 days</option>
+                    </select>
+                    <button class="modal-close" onclick="closeModal('graphs-modal')">&times;</button>
+                </div>
+            </div>
+            <div id="graphs-body">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Map View Modal -->
+    <div class="modal" id="map-modal">
+        <div class="modal-content large" style="max-width: 1400px;">
+            <div class="modal-header">
+                <h2>Computer Locations</h2>
+                <button class="modal-close" onclick="closeModal('map-modal')">&times;</button>
+            </div>
+            <div id="map-container" style="height: 500px; border-radius: 8px; background: var(--bg-primary);"></div>
+            <div id="map-legend" style="margin-top: 1rem;"></div>
+        </div>
+    </div>
+
+    <!-- All Diagnostics Modal -->
+    <div class="modal" id="diagnostics-modal">
+        <div class="modal-content large" style="max-width: 1200px;">
+            <div class="modal-header">
+                <h2>Diagnostic Logs</h2>
+                <button class="modal-close" onclick="closeModal('diagnostics-modal')">&times;</button>
+            </div>
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                These logs are captured automatically when CPU, Memory, or Disk exceeds your alert thresholds.
+            </p>
+            <div id="all-diagnostics-body">Loading...</div>
+        </div>
+    </div>
+
+    <script>
+        let computers = [];
+        let alerts = [];
+        let currentPC = null;
+        let currentTab = 'overview';
+        let viewMode = localStorage.getItem('viewMode') || 'tabs'; // 'tabs' (focused) or 'grid' (all at once)
+
+        // Auth header for API calls
+        const authHeader = 'Basic ' + btoa('admin:admin');
+
+        function getProgressClass(value) {
+            if (value < 60) return 'progress-low';
+            if (value < 85) return 'progress-medium';
+            return 'progress-high';
+        }
+
+        function formatUptime(seconds) {
+            if (!seconds) return 'Unknown';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${mins}m`;
+            return `${mins}m`;
+        }
+
+        function formatLastSeen(isoString) {
+            const date = new Date(isoString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours}h ago`;
+            const diffDays = Math.floor(diffHours / 24);
+            return `${diffDays}d ago`;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+            if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(1) + ' MB';
+            return (bytes/1024/1024/1024).toFixed(1) + ' GB';
+        }
+
+        function getSignalBars(strength) {
+            // Using CSS-based bars for better compatibility
+            const bars = [20, 40, 60, 80];
+            const color = strength >= 60 ? 'var(--success)' : strength >= 40 ? 'var(--warning)' : 'var(--danger)';
+            let html = '<span style="display: inline-flex; align-items: flex-end; gap: 1px; height: 12px;">';
+            bars.forEach((threshold, i) => {
+                const height = 4 + (i * 3);
+                const active = strength >= threshold;
+                html += `<span style="width: 3px; height: ${height}px; background: ${active ? color : 'var(--border)'}; border-radius: 1px;"></span>`;
+            });
+            html += '</span>';
+            return html;
+        }
+
+        function getSignalIcon(strength) {
+            if (!strength) return '';
+            return `<span title="WiFi Signal: ${strength}%" style="margin-left: 0.5rem;">${getSignalBars(strength)}</span>`;
+        }
+
+        function getSpeedColor(mbps) {
+            if (mbps >= 50) return 'var(--success)';  // Excellent
+            if (mbps >= 25) return '#22d3ee';         // Good (cyan)
+            if (mbps >= 10) return 'var(--warning)';  // OK
+            if (mbps >= 5) return '#f97316';          // Slow (orange)
+            return 'var(--danger)';                   // Very slow
+        }
+
+        function getSpeedRating(mbps) {
+            if (mbps >= 50) return 'Excellent';
+            if (mbps >= 25) return 'Good';
+            if (mbps >= 10) return 'OK';
+            if (mbps >= 5) return 'Slow';
+            return 'Very Slow';
+        }
+
+        function getResponsivenessLabel(mbps) {
+            if (mbps >= 50) return 'FAST';
+            if (mbps >= 25) return 'GOOD';
+            if (mbps >= 10) return 'OK';
+            if (mbps >= 5) return 'SLOW';
+            return 'LAG';
+        }
+
+        function getResponsivenessColor(mbps) {
+            if (mbps >= 50) return '#22c55e';  // Green
+            if (mbps >= 25) return '#22d3ee';  // Cyan
+            if (mbps >= 10) return '#eab308';  // Yellow
+            if (mbps >= 5) return '#f97316';   // Orange
+            return '#ef4444';                   // Red
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('light-theme');
+            localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
+        }
+
+        // Load theme
+        if (localStorage.getItem('theme') === 'light') {
+            document.body.classList.add('light-theme');
+        }
+
+        function toggleViewMode() {
+            viewMode = viewMode === 'tabs' ? 'grid' : 'tabs';
+            localStorage.setItem('viewMode', viewMode);
+            showDetails(currentPC);
+        }
+
+        function showTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            const activeTab = document.querySelector(`.tab[onclick="showTab('${tab}')"]`);
+            if (activeTab) activeTab.classList.add('active');
+            renderTabContent(currentPC, tab);
+        }
+
+        function renderTabContent(pc, tab) {
+            const procs = pc.extra?.top_processes || [];
+            const disks = pc.extra?.disks || [];
+            const groups = [...new Set(computers.map(c => c.group_name))].filter(g => g);
+            let html = '';
+
+            if (tab === 'overview') {
+                html = `
+                    <div class="info-grid">
+                        <div class="info-item"><span class="info-label">Status</span><span>${pc.is_online ? 'Online' : 'Offline'}</span></div>
+                        <div class="info-item"><span class="info-label">IP Address</span><span>${pc.ip}</span></div>
+                        <div class="info-item"><span class="info-label">OS</span><span>${pc.os}</span></div>
+                        <div class="info-item"><span class="info-label">Agent</span><span>${pc.agent_version || 'unknown'}${pc.is_online && serverAgentVersion && pc.agent_version !== serverAgentVersion ? ` <button class="btn" style="font-size: 0.7rem; padding: 2px 8px; margin-left: 8px;" onclick="updateAgent('${pc.id}')">Update</button>` : ''}</span></div>
+                        <div class="info-item"><span class="info-label">Uptime</span><span>${formatUptime(pc.extra?.uptime_seconds)}</span></div>
+                        <div class="info-item"><span class="info-label">CPU Cores</span><span>${pc.extra?.cpu_count || '-'} (${pc.extra?.cpu_count_physical || '-'} physical)</span></div>
+                        <div class="info-item"><span class="info-label">RAM</span><span>${pc.extra?.memory_total_gb || '-'} GB total</span></div>
+                        <div class="info-item"><span class="info-label">Processes</span><span>${pc.extra?.process_count || '-'}</span></div>
+                        <div class="info-item"><span class="info-label">MAC Address</span><span>${pc.mac_address || pc.extra?.mac_address || '-'}</span></div>
+                        ${pc.extra?.gpu ? `<div class="info-item" style="grid-column: span 2;"><span class="info-label">GPU</span><span>${Array.isArray(pc.extra.gpu) ? pc.extra.gpu.map(g => typeof g === 'string' ? g : g.name).join(', ') : pc.extra.gpu}</span></div>` : ''}
+                    </div>
+                    <div class="metrics" style="margin-top: 1rem;">
+                        <div class="metric">
+                            <div class="metric-value">${Math.round(pc.cpu_percent)}%</div>
+                            <div class="metric-label">CPU</div>
+                            <div class="progress-bar"><div class="progress-fill ${getProgressClass(pc.cpu_percent)}" style="width: ${pc.cpu_percent}%"></div></div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${Math.round(pc.memory_percent)}%</div>
+                            <div class="metric-label">RAM</div>
+                            <div class="progress-bar"><div class="progress-fill ${getProgressClass(pc.memory_percent)}" style="width: ${pc.memory_percent}%"></div></div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${Math.round(pc.disk_percent)}%</div>
+                            <div class="metric-label">Disk</div>
+                            <div class="progress-bar"><div class="progress-fill ${getProgressClass(pc.disk_percent)}" style="width: ${pc.disk_percent}%"></div></div>
+                        </div>
+                    </div>
+                `;
+            } else if (tab === 'terminal') {
+                html = `
+                    <div style="background: #1a1a2e; border-radius: 8px; padding: 1rem; font-family: monospace;">
+                        <div id="terminal-output" style="height: 300px; overflow-y: auto; margin-bottom: 1rem; font-size: 0.85rem; color: #0f0;">
+                            <div style="color: var(--text-muted);">Type a command and press Enter. Results appear instantly.</div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <span style="color: #0f0;">$</span>
+                            <input type="text" id="terminal-input" placeholder="dir, ipconfig, whoami, tasklist..."
+                                   style="flex: 1; background: transparent; border: none; color: #0f0; outline: none; font-family: monospace;"
+                                   onkeypress="if(event.key==='Enter')runCommand('${pc.id}')" autofocus>
+                            <button class="btn btn-primary" onclick="runCommand('${pc.id}')" ${!pc.is_online ? 'disabled' : ''}>Run</button>
+                        </div>
+                    </div>
+                    <h4 style="margin: 1rem 0 0.5rem;">Command History</h4>
+                    <div id="command-history" style="max-height: 200px; overflow-y: auto;">Loading...</div>
+                `;
+                setTimeout(() => loadCommandHistory(pc.id), 100);
+            } else if (tab === 'files') {
+                const pcIdForFiles = pc.id;
+                html = `
+                    <div style="margin-bottom: 1rem;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button class="btn" onclick="browseFiles('${pc.id}', '')">Root/Drives</button>
+                            <input type="text" id="file-path" placeholder="C:\\Users" style="flex: 1;">
+                            <button class="btn btn-primary" onclick="browseFiles('${pc.id}', document.getElementById('file-path').value)">Go</button>
+                        </div>
+                    </div>
+                    <div id="file-browser" style="background: var(--bg-primary); border-radius: 8px; padding: 1rem; min-height: 350px; max-height: 450px; overflow-y: auto;">
+                        <p style="color: var(--text-muted); text-align: center;">Loading...</p>
+                    </div>
+                `;
+                // Auto-load drives when Files tab is opened
+                setTimeout(() => browseFiles(pcIdForFiles, ''), 100);
+            } else if (tab === 'network') {
+                html = `
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                        ${pc.extra?.connected_network ? `
+                        <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.25rem;">NETWORK</div>
+                            <div style="font-weight: bold;">${pc.extra.connected_network.name}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">${pc.extra.connected_network.type}</div>
+                        </div>
+                        ` : ''}
+                        ${pc.extra?.wifi_signal ? `
+                        <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.25rem;">SIGNAL STRENGTH</div>
+                            <div style="font-size: 1.5rem; font-weight: bold;">${pc.extra.wifi_signal}%</div>
+                            <div>${getSignalBars(pc.extra.wifi_signal)}</div>
+                        </div>
+                        ` : ''}
+                        ${pc.extra?.network ? `
+                        <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.25rem;">TOTAL SENT</div>
+                            <div style="font-weight: bold;">${formatBytes(pc.extra.network.bytes_sent)}</div>
+                        </div>
+                        <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.25rem;">TOTAL RECEIVED</div>
+                            <div style="font-weight: bold;">${formatBytes(pc.extra.network.bytes_recv)}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; text-align: center; margin-bottom: 1.5rem;">
+                        <h4 style="margin-bottom: 0.75rem;">Speed Test</h4>
+                        <button class="btn btn-primary" onclick="runSpeedTest('${pc.id}')" ${!pc.is_online ? 'disabled' : ''} id="speedtest-btn" style="padding: 0.75rem 2rem; font-size: 1rem;">
+                            ${pc.is_online ? 'Run Speed Test' : 'Computer Offline'}
+                        </button>
+                    </div>
+                    <h4 style="margin-bottom: 0.75rem;">Speed Test History</h4>
+                    <div id="speedtest-history">Loading...</div>
+                `;
+                loadSpeedTestHistory(pc.id);
+            } else if (tab === 'processes') {
+                html = `
+                    <div class="process-list" style="max-height: 450px;">
+                        <div class="process-item" style="font-weight: bold; border-bottom: 2px solid var(--border);">
+                            <span class="process-name">Process</span>
+                            <span class="process-stat">CPU</span>
+                            <span class="process-stat">RAM</span>
+                        </div>
+                        ${procs.map(p => `
+                            <div class="process-item">
+                                <span class="process-name">${p.name}</span>
+                                <span class="process-stat">${p.cpu}%</span>
+                                <span class="process-stat">${p.memory}%</span>
+                            </div>
+                        `).join('')}
+                        ${procs.length === 0 ? '<p style="padding: 1rem; color: var(--text-muted);">No process data available</p>' : ''}
+                    </div>
+                `;
+            } else if (tab === 'disks') {
+                html = disks.map(d => `
+                    <div class="disk-item">
+                        <div class="disk-header">
+                            <strong>${d.mountpoint}</strong>
+                            <span>${d.used_gb} / ${d.total_gb} GB (${d.percent}%)</span>
+                        </div>
+                        <div class="progress-bar" style="height: 8px;">
+                            <div class="progress-fill ${getProgressClass(d.percent)}" style="width: ${d.percent}%"></div>
+                        </div>
+                        <small style="color: var(--text-muted);">${d.device} - ${d.fstype}</small>
+                    </div>
+                `).join('') || '<p style="color: var(--text-muted);">No disk data available</p>';
+            } else if (tab === 'connect') {
+                html = `
+                    <div class="form-group">
+                        <label>RustDesk ${pc.extra?.rustdesk_installed ? `<span style="color: var(--success);">(Installed)</span>` : `<span style="color: var(--text-muted);">(Not Installed)</span>`}</label>
+                        ${pc.extra?.rustdesk_id ? `
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <input type="text" value="${pc.extra.rustdesk_id}" readonly>
+                            <button class="btn btn-primary" onclick="connectRustDesk('${pc.id}')" ${!pc.is_online ? 'disabled' : ''}>
+                                ${pc.extra?.rustdesk_password ? 'One-Click Connect' : 'Connect'}
+                            </button>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            ${pc.extra?.rustdesk_password ?
+                                `<span style="color: var(--success); font-size: 0.85rem;">Password configured for unattended access</span>` :
+                                `<span style="color: var(--warning); font-size: 0.85rem;">No password set</span>
+                                 <button class="btn" style="font-size: 0.8rem;" onclick="setupRustDesk('${pc.id}')" ${!pc.is_online ? 'disabled' : ''}>Setup Password</button>`
+                            }
+                        </div>
+                        ` : `
+                        <p style="color: var(--text-muted);">Install RustDesk for remote desktop: <a href="https://rustdesk.com" target="_blank" style="color: var(--accent);">rustdesk.com</a></p>
+                        `}
+                    </div>
+                    <div class="form-group">
+                        <label>${pc.os.includes('Windows') ? 'RDP Command' : 'SSH Command'}</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" value="${pc.os.includes('Windows') ? `mstsc /v:${pc.ip}` : `ssh ${pc.ip}`}" readonly>
+                            <button class="btn" onclick="copyText('${pc.os.includes('Windows') ? `mstsc /v:${pc.ip}` : `ssh ${pc.ip}`}')">Copy</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>IP Address</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" value="${pc.ip}" readonly>
+                            <button class="btn" onclick="copyText('${pc.ip}')">Copy</button>
+                        </div>
+                    </div>
+                    ${(pc.mac_address || pc.extra?.mac_address) ? `
+                    <div class="form-group">
+                        <label>Wake-on-LAN</label>
+                        <button class="btn btn-success" onclick="wakeComputer('${pc.id}')" ${pc.is_online ? 'disabled' : ''} style="width: 100%;">
+                            ${pc.is_online ? 'Already Online' : 'Wake Up'}
+                        </button>
+                    </div>
+                    ` : '<p style="color: var(--text-muted);">Wake-on-LAN requires MAC address</p>'}
+                `;
+            } else if (tab === 'diagnostics') {
+                html = `
+                    <div style="margin-bottom: 1rem;">
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">
+                            Diagnostic logs are captured automatically when CPU, Memory, or Disk exceeds your alert thresholds.
+                            They show what processes were running at the time.
+                        </p>
+                    </div>
+                    <div id="diagnostic-logs">Loading...</div>
+                `;
+                setTimeout(() => loadDiagnosticLogs(pc.id), 100);
+            } else if (tab === 'settings') {
+                html = `
+                    <div class="form-group">
+                        <label>Display Name</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="pc-name" value="${pc.name}" placeholder="Computer name">
+                            <button class="btn btn-primary" onclick="renameComputer('${pc.id}')">Rename</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Group</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <select id="pc-group" onchange="updateGroup('${pc.id}', this.value)">
+                                <option value="Ungrouped" ${pc.group_name === 'Ungrouped' ? 'selected' : ''}>Ungrouped</option>
+                                ${groups.filter(g => g !== 'Ungrouped').map(g => `<option value="${g}" ${pc.group_name === g ? 'selected' : ''}>${g}</option>`).join('')}
+                            </select>
+                            <input type="text" id="new-group" placeholder="New group name" style="width: 150px;">
+                            <button class="btn" onclick="addToNewGroup('${pc.id}')">Add</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <textarea id="pc-notes" placeholder="Add notes about this computer...">${pc.notes || ''}</textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveNotes('${pc.id}')">Save Notes</button>
+                    <button class="btn btn-danger" style="margin-left: 0.5rem;" onclick="deleteComputer('${pc.id}')">Delete Computer</button>
+                `;
+            }
+
+            document.getElementById('modal-body').innerHTML = html;
+        }
+
+        function showDetails(pc) {
+            currentPC = pc;
+            document.getElementById('modal-title').textContent = pc.name + (pc.is_online ? ' (Online)' : ' (Offline)');
+
+            const modalContainer = document.getElementById('modal-container');
+            const tabBar = document.getElementById('tab-bar');
+            const viewBtn = document.getElementById('view-toggle-btn');
+
+            if (viewMode === 'grid') {
+                modalContainer.classList.add('large');
+                modalContainer.style.maxWidth = '1400px';
+                tabBar.style.display = 'none';
+                viewBtn.textContent = 'Tab View';
+                renderGridView(pc);
+            } else {
+                modalContainer.classList.remove('large');
+                modalContainer.style.maxWidth = '950px';
+                tabBar.style.display = 'flex';
+                viewBtn.textContent = 'Grid View';
+                // Reset tab highlighting
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                const activeTab = document.querySelector(`.tab[onclick="showTab('${currentTab}')"]`);
+                if (activeTab) activeTab.classList.add('active');
+                renderTabContent(pc, currentTab);
+            }
+
+            document.getElementById('details-modal').classList.add('active');
+
+            // If speed test is running for this computer, update button state
+            if (runningSpeedTests[pc.id] !== undefined) {
+                setTimeout(() => updateSpeedTestButton(pc.id, true), 100);
+            }
+        }
+
+        function renderGridView(pc) {
+            const procs = pc.extra?.top_processes || [];
+            const disks = pc.extra?.disks || [];
+            const groups = [...new Set(computers.map(c => c.group_name))].filter(g => g);
+
+            const html = `
+                <div class="details-grid">
+                    <!-- Overview Section -->
+                    <div class="details-section">
+                        <h3>System Info</h3>
+                        <div class="info-grid">
+                            <div class="info-item"><span class="info-label">IP Address</span><span>${pc.ip}</span></div>
+                            <div class="info-item"><span class="info-label">OS</span><span>${pc.os}</span></div>
+                            <div class="info-item"><span class="info-label">Agent</span><span>${pc.agent_version || 'unknown'}${pc.is_online && serverAgentVersion && pc.agent_version !== serverAgentVersion ? ` <button class="btn" style="font-size: 0.65rem; padding: 2px 6px; margin-left: 5px;" onclick="updateAgent('${pc.id}')">Update</button>` : ''}</span></div>
+                            <div class="info-item"><span class="info-label">Uptime</span><span>${formatUptime(pc.extra?.uptime_seconds)}</span></div>
+                            <div class="info-item"><span class="info-label">CPU Cores</span><span>${pc.extra?.cpu_count || '-'}</span></div>
+                            <div class="info-item"><span class="info-label">RAM</span><span>${pc.extra?.memory_total_gb || '-'} GB</span></div>
+                            <div class="info-item"><span class="info-label">Processes</span><span>${pc.extra?.process_count || '-'}</span></div>
+                            ${pc.extra?.gpu ? `<div class="info-item" style="grid-column: span 2;"><span class="info-label">GPU</span><span>${Array.isArray(pc.extra.gpu) ? pc.extra.gpu.map(g => typeof g === 'string' ? g : g.name).join(', ') : pc.extra.gpu}</span></div>` : ''}
+                        </div>
+                        <div class="metrics" style="margin-top: 1rem;">
+                            <div class="metric">
+                                <div class="metric-value">${Math.round(pc.cpu_percent)}%</div>
+                                <div class="metric-label">CPU</div>
+                                <div class="progress-bar"><div class="progress-fill ${getProgressClass(pc.cpu_percent)}" style="width: ${pc.cpu_percent}%"></div></div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">${Math.round(pc.memory_percent)}%</div>
+                                <div class="metric-label">RAM</div>
+                                <div class="progress-bar"><div class="progress-fill ${getProgressClass(pc.memory_percent)}" style="width: ${pc.memory_percent}%"></div></div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">${Math.round(pc.disk_percent)}%</div>
+                                <div class="metric-label">Disk</div>
+                                <div class="progress-bar"><div class="progress-fill ${getProgressClass(pc.disk_percent)}" style="width: ${pc.disk_percent}%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terminal Section -->
+                    <div class="details-section">
+                        <h3>Terminal</h3>
+                        <div style="background: #1a1a2e; border-radius: 8px; padding: 0.75rem; font-family: monospace;">
+                            <div id="terminal-output" style="min-height: 100px; margin-bottom: 0.5rem; font-size: 0.8rem; color: #0f0;">
+                                <div style="color: var(--text-muted);">Run any shell command on this computer.</div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <span style="color: #0f0;">$</span>
+                                <input type="text" id="terminal-input" placeholder="dir, ipconfig, whoami..."
+                                       style="flex: 1; background: transparent; border: none; color: #0f0; outline: none; font-family: monospace; font-size: 0.85rem;"
+                                       onkeypress="if(event.key==='Enter')runCommand('${pc.id}')">
+                                <button class="btn btn-primary" onclick="runCommand('${pc.id}')" ${!pc.is_online ? 'disabled' : ''}>Run</button>
+                            </div>
+                        </div>
+                        <div id="command-history" style="margin-top: 0.5rem;"></div>
+                    </div>
+
+                    <!-- File Browser Section -->
+                    <div class="details-section">
+                        <h3>File Browser</h3>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <button class="btn" onclick="browseFiles('${pc.id}', '')">Root/Drives</button>
+                            <input type="text" id="file-path" placeholder="C:\\Users" style="flex: 1; font-size: 0.85rem;">
+                            <button class="btn btn-primary" onclick="browseFiles('${pc.id}', document.getElementById('file-path').value)">Go</button>
+                        </div>
+                        <div id="file-browser" style="background: var(--bg-secondary); border-radius: 6px; padding: 0.5rem; min-height: 150px; font-size: 0.85rem;">
+                            <p style="color: var(--text-muted); text-align: center;">Loading...</p>
+                        </div>
+                    </div>
+
+                    <!-- Network & Speed Test Section -->
+                    <div class="details-section">
+                        <h3>Network</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">
+                            ${pc.extra?.connected_network ? `
+                            <div style="background: var(--bg-secondary); padding: 0.5rem; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 0.65rem; color: var(--text-muted);">NETWORK</div>
+                                <div style="font-weight: bold; font-size: 0.9rem;">${pc.extra.connected_network.name}</div>
+                            </div>
+                            ` : ''}
+                            ${pc.extra?.wifi_signal ? `
+                            <div style="background: var(--bg-secondary); padding: 0.5rem; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 0.65rem; color: var(--text-muted);">SIGNAL</div>
+                                <div style="font-weight: bold;">${pc.extra.wifi_signal}% ${getSignalBars(pc.extra.wifi_signal)}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                        <button class="btn btn-primary" onclick="runSpeedTest('${pc.id}')" ${!pc.is_online ? 'disabled' : ''} id="speedtest-btn" style="width: 100%; margin-bottom: 0.5rem;">
+                            ${pc.is_online ? 'Run Speed Test' : 'Offline'}
+                        </button>
+                        <div id="speedtest-history"></div>
+                    </div>
+
+                    <!-- Processes Section -->
+                    <div class="details-section">
+                        <h3>Top Processes</h3>
+                        <div class="process-list">
+                            <div class="process-item" style="font-weight: bold; font-size: 0.75rem;">
+                                <span class="process-name">Process</span>
+                                <span class="process-stat">CPU</span>
+                                <span class="process-stat">RAM</span>
+                            </div>
+                            ${procs.slice(0, 10).map(p => `
+                                <div class="process-item" style="font-size: 0.8rem;">
+                                    <span class="process-name">${p.name}</span>
+                                    <span class="process-stat">${p.cpu}%</span>
+                                    <span class="process-stat">${p.memory}%</span>
+                                </div>
+                            `).join('')}
+                            ${procs.length === 0 ? '<p style="padding: 0.5rem; color: var(--text-muted); font-size: 0.8rem;">No data</p>' : ''}
+                        </div>
+                    </div>
+
+                    <!-- Disks Section -->
+                    <div class="details-section">
+                        <h3>Disks</h3>
+                        ${disks.map(d => `
+                            <div style="margin-bottom: 0.5rem;">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                                    <strong>${d.mountpoint}</strong>
+                                    <span>${d.used_gb}/${d.total_gb} GB</span>
+                                </div>
+                                <div class="progress-bar" style="height: 8px;">
+                                    <div class="progress-fill ${getProgressClass(d.percent)}" style="width: ${d.percent}%"></div>
+                                </div>
+                            </div>
+                        `).join('') || '<p style="color: var(--text-muted); font-size: 0.85rem;">No disk data</p>'}
+                    </div>
+
+                    <!-- Connect Section -->
+                    <div class="details-section">
+                        <h3>Remote Connect</h3>
+                        <div style="margin-bottom: 0.75rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">
+                                RustDesk ${pc.extra?.rustdesk_installed ? `<span style="color: var(--success);">Installed</span>` : `<span style="color: var(--danger);">Not Installed</span>`}
+                            </label>
+                            ${pc.extra?.rustdesk_id ? `
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <input type="text" value="${pc.extra.rustdesk_id}" readonly style="font-size: 0.85rem;">
+                                <button class="btn btn-primary" onclick="connectRustDesk('${pc.id}')" ${!pc.is_online ? 'disabled' : ''}>
+                                    ${pc.extra?.rustdesk_password ? 'Connect' : 'Connect'}
+                                </button>
+                            </div>
+                            ${!pc.extra?.rustdesk_password ? `
+                            <button class="btn" style="font-size: 0.75rem; width: 100%;" onclick="setupRustDesk('${pc.id}')" ${!pc.is_online ? 'disabled' : ''}>
+                                Setup One-Click Password
+                            </button>
+                            ` : `<span style="color: var(--success); font-size: 0.75rem;">One-click enabled</span>`}
+                            ` : `<p style="color: var(--text-muted); font-size: 0.8rem; margin: 0;">Install from <a href="https://rustdesk.com" target="_blank" style="color: var(--accent);">rustdesk.com</a></p>`}
+                        </div>
+                        <div style="margin-bottom: 0.75rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">${pc.os.includes('Windows') ? 'RDP' : 'SSH'}</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" value="${pc.os.includes('Windows') ? `mstsc /v:${pc.ip}` : `ssh ${pc.ip}`}" readonly style="font-size: 0.85rem;">
+                                <button class="btn" onclick="copyText('${pc.os.includes('Windows') ? `mstsc /v:${pc.ip}` : `ssh ${pc.ip}`}')">Copy</button>
+                            </div>
+                        </div>
+                        ${(pc.mac_address || pc.extra?.mac_address) ? `
+                        <button class="btn btn-success" onclick="wakeComputer('${pc.id}')" ${pc.is_online ? 'disabled' : ''} style="width: 100%;">
+                            ${pc.is_online ? 'Already Online' : 'Wake Up (WoL)'}
+                        </button>
+                        ` : ''}
+                    </div>
+
+                    <!-- Settings Section -->
+                    <div class="details-section">
+                        <h3>Settings</h3>
+                        <div class="form-group" style="margin-bottom: 0.5rem;">
+                            <label style="font-size: 0.75rem;">Display Name</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="pc-name" value="${pc.name}" style="font-size: 0.85rem;">
+                                <button class="btn" onclick="renameComputer('${pc.id}')">Save</button>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0.5rem;">
+                            <label style="font-size: 0.75rem;">Group</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <select id="pc-group" onchange="updateGroup('${pc.id}', this.value)" style="font-size: 0.85rem;">
+                                    <option value="Ungrouped" ${pc.group_name === 'Ungrouped' ? 'selected' : ''}>Ungrouped</option>
+                                    ${groups.filter(g => g !== 'Ungrouped').map(g => `<option value="${g}" ${pc.group_name === g ? 'selected' : ''}>${g}</option>`).join('')}
+                                </select>
+                                <input type="text" id="new-group" placeholder="New group" style="width: 100px; font-size: 0.85rem;">
+                                <button class="btn" onclick="addToNewGroup('${pc.id}')">+</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size: 0.75rem;">Notes</label>
+                            <textarea id="pc-notes" style="font-size: 0.85rem; min-height: 50px;">${pc.notes || ''}</textarea>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-primary" onclick="saveNotes('${pc.id}')">Save Notes</button>
+                            <button class="btn btn-danger" onclick="deleteComputer('${pc.id}')">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('modal-body').innerHTML = html;
+
+            // Load dynamic content for grid view
+            const pcIdForGridView = pc.id;
+            setTimeout(() => {
+                loadCommandHistory(pcIdForGridView);
+                loadSpeedTestHistory(pcIdForGridView);
+                browseFiles(pcIdForGridView, '');
+            }, 100);
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        function copyText(text) {
+            navigator.clipboard.writeText(text);
+        }
+
+        async function wakeComputer(id) {
+            try {
+                const res = await fetch(`/api/wake/${id}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+                alert(data.message || 'Wake packet sent!');
+            } catch (e) {
+                alert('Failed to send wake packet');
+            }
+        }
+
+        async function connectRustDesk(id) {
+            try {
+                const res = await fetch(`/api/rustdesk/${id}/connect`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+
+                if (data.status === 'not_installed') {
+                    alert('RustDesk is not installed on this computer.\\n\\nInstall it from: https://rustdesk.com');
+                    return;
+                }
+
+                if (data.connect_url) {
+                    showNotification('Launching RustDesk...');
+                    window.location.href = data.connect_url;
+                } else {
+                    alert('Could not get RustDesk connection info');
+                }
+            } catch (e) {
+                alert('Failed to connect: ' + e.message);
+            }
+        }
+
+        async function setupRustDesk(id) {
+            const password = prompt('Enter a permanent password for unattended access:\\n(This will be stored securely and used for one-click connection)');
+            if (!password) return;
+
+            try {
+                const res = await fetch(`/api/rustdesk/${id}/set-password`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: password })
+                });
+                const data = await res.json();
+
+                if (data.status === 'sent') {
+                    showNotification('Password set! It will take effect on next heartbeat.');
+                    // Refresh after a moment
+                    setTimeout(() => loadComputers(), 3000);
+                } else {
+                    alert(data.message || 'Failed to set password');
+                }
+            } catch (e) {
+                alert('Failed to set password: ' + e.message);
+            }
+        }
+
+        async function updateGroup(id, group) {
+            await fetch(`/api/computers/${id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group_name: group })
+            });
+            fetchComputers();
+        }
+
+        async function addToNewGroup(id) {
+            const group = document.getElementById('new-group').value.trim();
+            if (group) {
+                await updateGroup(id, group);
+                closeModal('details-modal');
+            }
+        }
+
+        async function saveNotes(id) {
+            const notes = document.getElementById('pc-notes').value;
+            await fetch(`/api/computers/${id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notes: notes })
+            });
+            fetchComputers();
+            alert('Notes saved!');
+        }
+
+        async function deleteComputer(id) {
+            if (confirm('Are you sure you want to remove this computer?')) {
+                await fetch(`/api/computers/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': authHeader }
+                });
+                closeModal('details-modal');
+                fetchComputers();
+            }
+        }
+
+        async function showAlerts() {
+            document.getElementById('alerts-body').innerHTML = alerts.length === 0
+                ? '<p style="color: var(--text-muted);">No alerts</p>'
+                : alerts.map(a => `
+                    <div class="alert-item">
+                        <div>
+                            <strong>${a.message}</strong>
+                            <br><small style="color: var(--text-muted);">${formatLastSeen(a.created_at)}</small>
+                        </div>
+                        <button class="btn" onclick="acknowledgeAlert(${a.id})">Dismiss</button>
+                    </div>
+                `).join('');
+            document.getElementById('alerts-modal').classList.add('active');
+        }
+
+        async function acknowledgeAlert(id) {
+            await fetch(`/api/alerts/${id}/acknowledge`, {
+                method: 'POST',
+                headers: { 'Authorization': authHeader }
+            });
+            fetchAlerts();
+        }
+
+        // ============================================
+        // Global Settings
+        // ============================================
+        async function showGlobalSettings() {
+            document.getElementById('settings-modal').classList.add('active');
+            try {
+                const [settingsRes, configRes] = await Promise.all([
+                    fetch('/api/settings', { headers: { 'Authorization': authHeader } }),
+                    fetch('/api/config', { headers: { 'Authorization': authHeader } })
+                ]);
+                const data = await settingsRes.json();
+                const config = await configRes.json();
+                const s = data.settings || {};
+
+                document.getElementById('settings-body').innerHTML = `
+                    <h3 style="margin-bottom: 1rem;">Add New Computer</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        Run one of these commands on a new computer to install the agent + RustDesk:
+                    </p>
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-size: 0.85rem; font-weight: bold; color: var(--accent);">Windows (PowerShell as Admin):</label>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                            <input type="text" id="install-windows" readonly style="font-size: 0.7rem; font-family: monospace; background: var(--bg-secondary);">
+                            <button class="btn btn-primary" onclick="copyText(document.getElementById('install-windows').value)">Copy</button>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-size: 0.85rem; font-weight: bold; color: var(--success);">Linux/Ubuntu:</label>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                            <input type="text" id="install-linux" readonly style="font-size: 0.7rem; font-family: monospace; background: var(--bg-secondary);">
+                            <button class="btn btn-primary" onclick="copyText(document.getElementById('install-linux').value)">Copy</button>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-size: 0.85rem; font-weight: bold; color: var(--text-muted);">Mac:</label>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                            <input type="text" id="install-mac" readonly style="font-size: 0.7rem; font-family: monospace; background: var(--bg-secondary);">
+                            <button class="btn btn-primary" onclick="copyText(document.getElementById('install-mac').value)">Copy</button>
+                        </div>
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
+                    <div class="form-group">
+                        <label>Agent API Key</label>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            New agents must use this key to connect. Auto-generated on first server run.
+                        </p>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" value="${config.agent_api_key}" readonly style="font-family: monospace; font-size: 0.85rem;">
+                            <button class="btn" onclick="copyText('${config.agent_api_key}')">Copy</button>
+                        </div>
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
+                    <h3 style="margin-bottom: 1rem;">Alert Thresholds</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        Get alerts when metrics exceed these thresholds.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>CPU Alert (%)</label>
+                            <input type="number" id="alert-cpu" value="${s.alert_cpu_threshold || 90}" min="1" max="100">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Memory Alert (%)</label>
+                            <input type="number" id="alert-memory" value="${s.alert_memory_threshold || 90}" min="1" max="100">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Disk Alert (%)</label>
+                            <input type="number" id="alert-disk" value="${s.alert_disk_threshold || 90}" min="1" max="100">
+                        </div>
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
+                    <h3 style="margin-bottom: 1rem;">Auto Speed Tests</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        Automatically run speed tests on all computers at regular intervals.
+                    </p>
+                    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="auto-speedtest-enabled" ${s.auto_speedtest_enabled === 'true' ? 'checked' : ''} style="width: auto;">
+                            Enable Auto Speed Tests
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label>Every</label>
+                            <select id="auto-speedtest-interval" style="width: auto;">
+                                <option value="1" ${s.auto_speedtest_interval_hours === '1' ? 'selected' : ''}>1 hour</option>
+                                <option value="3" ${s.auto_speedtest_interval_hours === '3' ? 'selected' : ''}>3 hours</option>
+                                <option value="6" ${s.auto_speedtest_interval_hours === '6' || !s.auto_speedtest_interval_hours ? 'selected' : ''}>6 hours</option>
+                                <option value="12" ${s.auto_speedtest_interval_hours === '12' ? 'selected' : ''}>12 hours</option>
+                                <option value="24" ${s.auto_speedtest_interval_hours === '24' ? 'selected' : ''}>24 hours</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn" onclick="runAllSpeedTests()">Run Speed Tests Now (All Computers)</button>
+
+                    <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
+                    <h3 style="margin-bottom: 1rem;">Agent Updates</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        Push updates to all connected agents. Server version: <strong id="server-agent-version">loading...</strong>
+                    </p>
+                    <button class="btn" onclick="updateAllAgents()">Update All Agents</button>
+
+                    <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            <strong>Manual update</strong> (for agents without auto-update):
+                        </p>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="manual-update-cmd" value="curl -s '${window.location.origin}/install/agent.py?key=${config.agent_api_key}' -o agent.py && python3 agent.py" readonly style="font-size: 0.75rem; font-family: monospace;">
+                            <button class="btn" onclick="copyText(document.getElementById('manual-update-cmd').value)">Copy</button>
+                        </div>
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
+                    <h3 style="margin-bottom: 1rem;">Notifications</h3>
+                    <div class="form-group">
+                        <label>Discord Webhook URL</label>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Get alerts when computers go offline or thresholds are exceeded.
+                        </p>
+                        <input type="text" id="discord-webhook" value="${s.discord_webhook || ''}" placeholder="https://discord.com/api/webhooks/...">
+                    </div>
+
+                    <button class="btn btn-primary" onclick="saveGlobalSettings()">Save All Settings</button>
+
+                    <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
+                    <h3 style="margin-bottom: 1rem;">Quick Add Computer</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Click the <strong>+ Add Computer</strong> button in the header for one-click install commands!
+                    </p>
+                `;
+
+                // Load server agent version
+                fetch('/api/agent/version', { headers: { 'Authorization': authHeader } })
+                    .then(r => r.json())
+                    .then(d => {
+                        const el = document.getElementById('server-agent-version');
+                        if (el) el.textContent = d.version;
+                    })
+                    .catch(() => {
+                        const el = document.getElementById('server-agent-version');
+                        if (el) el.textContent = 'unknown';
+                    });
+
+                // Load install commands
+                fetch('/api/install-commands', { headers: { 'Authorization': authHeader } })
+                    .then(r => r.json())
+                    .then(d => {
+                        const winEl = document.getElementById('install-windows');
+                        const linuxEl = document.getElementById('install-linux');
+                        const macEl = document.getElementById('install-mac');
+                        if (winEl) winEl.value = d.windows_full || d.windows;
+                        if (linuxEl) linuxEl.value = d.linux_full || d.linux;
+                        if (macEl) macEl.value = d.mac_full || d.mac;
+                    })
+                    .catch(() => {});
+            } catch (e) {
+                document.getElementById('settings-body').innerHTML = '<p style="color: var(--danger);">Failed to load settings</p>';
+            }
+        }
+
+        async function runAllSpeedTests() {
+            try {
+                const res = await fetch('/api/speedtest/auto/run', {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force_all: true })
+                });
+                const data = await res.json();
+                if (data.count > 0) {
+                    showNotification(`Speed tests started for: ${data.triggered.join(', ')}`);
+                } else {
+                    showNotification('No online computers found. Make sure agents are running.');
+                }
+            } catch (e) {
+                showNotification('Failed to start speed tests');
+            }
+        }
+
+        async function updateAllAgents() {
+            try {
+                const res = await fetch('/api/agent/update-all', {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+                const updated = data.updated?.length || 0;
+                const offline = data.offline?.length || 0;
+                if (updated > 0) {
+                    showNotification(`Update sent to ${updated} agent(s). ${offline > 0 ? offline + ' offline.' : ''}`);
+                } else if (offline > 0) {
+                    showNotification(`All ${offline} agents are offline. Updates will apply when they reconnect.`);
+                } else {
+                    showNotification('No agents found.');
+                }
+            } catch (e) {
+                showNotification('Failed to trigger updates');
+            }
+        }
+
+        async function updateAgent(computerId) {
+            try {
+                const res = await fetch(`/api/agent/update/${computerId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+                if (data.status === 'update_sent') {
+                    showNotification('Update sent! Agent will restart shortly.');
+                } else if (data.status === 'offline') {
+                    showNotification('Agent is offline. Update will apply when it reconnects.');
+                } else {
+                    showNotification('Update failed: ' + (data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                showNotification('Failed to send update');
+            }
+        }
+
+        async function saveGlobalSettings() {
+            const settings = {
+                discord_webhook: document.getElementById('discord-webhook').value.trim(),
+                alert_cpu_threshold: document.getElementById('alert-cpu').value,
+                alert_memory_threshold: document.getElementById('alert-memory').value,
+                alert_disk_threshold: document.getElementById('alert-disk').value,
+                auto_speedtest_enabled: document.getElementById('auto-speedtest-enabled').checked ? 'true' : 'false',
+                auto_speedtest_interval_hours: document.getElementById('auto-speedtest-interval').value
+            };
+
+            try {
+                await fetch('/api/settings', {
+                    method: 'PUT',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+                showNotification('Settings saved!');
+            } catch (e) {
+                showNotification('Failed to save settings');
+            }
+        }
+
+        // ============================================
+        // Add Computer
+        // ============================================
+        async function showAddComputer() {
+            document.getElementById('add-computer-modal').classList.add('active');
+            document.getElementById('add-computer-body').innerHTML = '<p style="text-align: center;">Loading install commands...</p>';
+
+            try {
+                const res = await fetch('/api/install-commands', { headers: { 'Authorization': authHeader } });
+                const data = await res.json();
+
+                document.getElementById('add-computer-body').innerHTML = `
+                    <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">
+                        Copy and paste the command for your operating system. The agent will install and start automatically.
+                    </p>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+                            <span style="font-size: 1.5rem;">&#128187;</span>
+                            <h3>Windows</h3>
+                        </div>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Open PowerShell and paste:
+                        </p>
+                        <div style="position: relative;">
+                            <textarea id="cmd-windows" readonly style="width: 100%; height: 80px; font-family: monospace; font-size: 0.75rem; resize: none;">${escapeHtml(data.windows)}</textarea>
+                            <button class="btn" onclick="copyInstallCmd('windows')" style="position: absolute; top: 0.5rem; right: 0.5rem;">Copy</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+                            <span style="font-size: 1.5rem;">&#127822;</span>
+                            <h3>macOS</h3>
+                        </div>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Open Terminal and paste:
+                        </p>
+                        <div style="position: relative;">
+                            <textarea id="cmd-mac" readonly style="width: 100%; height: 60px; font-family: monospace; font-size: 0.75rem; resize: none;">${escapeHtml(data.mac)}</textarea>
+                            <button class="btn" onclick="copyInstallCmd('mac')" style="position: absolute; top: 0.5rem; right: 0.5rem;">Copy</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+                            <span style="font-size: 1.5rem;">&#128039;</span>
+                            <h3>Linux</h3>
+                        </div>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Open Terminal and paste:
+                        </p>
+                        <div style="position: relative;">
+                            <textarea id="cmd-linux" readonly style="width: 100%; height: 60px; font-family: monospace; font-size: 0.75rem; resize: none;">${escapeHtml(data.linux)}</textarea>
+                            <button class="btn" onclick="copyInstallCmd('linux')" style="position: absolute; top: 0.5rem; right: 0.5rem;">Copy</button>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--bg-primary); padding: 1rem; border-radius: 8px;">
+                        <h4 style="margin-bottom: 0.5rem;">What this does:</h4>
+                        <ol style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 1.25rem; line-height: 1.8;">
+                            <li>Downloads the agent script</li>
+                            <li>Configures it with your server URL and API key</li>
+                            <li>Installs required dependencies (psutil)</li>
+                            <li>Starts the agent</li>
+                        </ol>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.75rem;">
+                            The computer should appear in your dashboard within 1-2 minutes.
+                        </p>
+                    </div>
+                `;
+            } catch (e) {
+                document.getElementById('add-computer-body').innerHTML = '<p style="color: var(--danger);">Failed to generate install commands</p>';
+            }
+        }
+
+        function copyInstallCmd(platform) {
+            const textarea = document.getElementById('cmd-' + platform);
+            textarea.select();
+            document.execCommand('copy');
+            alert('Command copied! Paste it in the terminal on the target computer.');
+        }
+
+        async function runSpeedTest(computerId) {
+            const btn = document.getElementById('speedtest-btn');
+            btn.textContent = 'Starting...';
+            btn.disabled = true;
+
+            // Get current count before starting
+            try {
+                const histRes = await fetch(`/api/speedtest/${computerId}/history`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const histData = await histRes.json();
+                runningSpeedTests[computerId] = histData.tests.length;
+            } catch (e) {
+                runningSpeedTests[computerId] = 0;
+            }
+
+            try {
+                const res = await fetch(`/api/speedtest/${computerId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader }
+                });
+
+                btn.textContent = 'Running...';
+                btn.style.background = 'var(--success)';
+
+                // Poll for results in background (keeps running even if you click away)
+                pollForSpeedTestResult(computerId, 0);
+            } catch (e) {
+                btn.textContent = 'Failed - Try Again';
+                btn.disabled = false;
+                delete runningSpeedTests[computerId];
+            }
+        }
+
+        // Track running speed tests globally (so they work even if you click away)
+        let runningSpeedTests = {};
+
+        async function pollForSpeedTestResult(computerId, attempts) {
+            if (attempts > 120) { // ~60 seconds timeout
+                delete runningSpeedTests[computerId];
+                updateSpeedTestButton(computerId, false);
+                return;
+            }
+
+            await new Promise(r => setTimeout(r, 500));
+
+            try {
+                const res = await fetch(`/api/speedtest/${computerId}/history`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+
+                const startCount = runningSpeedTests[computerId];
+                if (startCount !== undefined && data.tests.length > startCount) {
+                    // Test completed!
+                    delete runningSpeedTests[computerId];
+                    updateSpeedTestButton(computerId, false);
+
+                    // Refresh history if modal is open on network tab
+                    const historyEl = document.getElementById('speedtest-history');
+                    if (historyEl) {
+                        loadSpeedTestHistory(computerId);
+                    }
+
+                    // Refresh main dashboard to show new speed next to Details
+                    fetchComputers();
+
+                    // Show notification
+                    const latest = data.tests[0];
+                    showNotification(`Speed Test Complete: ${latest.download_mbps} Mbps down, ${latest.upload_mbps || 0} Mbps up`);
+                    return;
+                }
+            } catch (e) {}
+
+            // Keep polling
+            pollForSpeedTestResult(computerId, attempts + 1);
+        }
+
+        function updateSpeedTestButton(computerId, running) {
+            const btn = document.getElementById('speedtest-btn');
+            if (btn && currentPC && currentPC.id === computerId) {
+                if (running) {
+                    btn.textContent = 'Running...';
+                    btn.style.background = 'var(--success)';
+                    btn.disabled = true;
+                } else {
+                    btn.textContent = 'Run Speed Test';
+                    btn.style.background = '';
+                    btn.disabled = !currentPC.is_online;
+                }
+            }
+        }
+
+        function showNotification(message) {
+            // Create toast notification
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: var(--success); color: white; padding: 1rem 1.5rem; border-radius: 8px; z-index: 9999; animation: fadeIn 0.3s;';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+
+        // ============================================
+        // Cluster View - All computers at a glance
+        // ============================================
+        function showClusterView() {
+            document.getElementById('cluster-modal').classList.add('active');
+            renderClusterView();
+        }
+
+        function renderClusterView() {
+            const online = computers.filter(c => c.is_online);
+            const offline = computers.filter(c => !c.is_online);
+
+            // Calculate averages
+            const avgCpu = online.length ? (online.reduce((a, c) => a + c.cpu_percent, 0) / online.length).toFixed(1) : 0;
+            const avgMem = online.length ? (online.reduce((a, c) => a + c.memory_percent, 0) / online.length).toFixed(1) : 0;
+            const avgDisk = online.length ? (online.reduce((a, c) => a + c.disk_percent, 0) / online.length).toFixed(1) : 0;
+
+            const html = `
+                <!-- Cluster Stats -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                    <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: var(--success);">${online.length}</div>
+                        <div style="color: var(--text-muted);">Online</div>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: var(--danger);">${offline.length}</div>
+                        <div style="color: var(--text-muted);">Offline</div>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: var(--accent);">${avgCpu}%</div>
+                        <div style="color: var(--text-muted);">Avg CPU</div>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: var(--warning);">${avgMem}%</div>
+                        <div style="color: var(--text-muted);">Avg Memory</div>
+                    </div>
+                    <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: var(--success);">${avgDisk}%</div>
+                        <div style="color: var(--text-muted);">Avg Disk</div>
+                    </div>
+                </div>
+
+                <!-- All Computers Table -->
+                <div style="background: var(--bg-primary); border-radius: 12px; overflow: hidden;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="background: var(--bg-tertiary);">
+                                <th style="padding: 1rem; text-align: left;">Computer</th>
+                                <th style="padding: 1rem; text-align: left;">Status</th>
+                                <th style="padding: 1rem; text-align: center;">Agent</th>
+                                <th style="padding: 1rem; text-align: left;">IP</th>
+                                <th style="padding: 1rem; text-align: center;">CPU</th>
+                                <th style="padding: 1rem; text-align: center;">Memory</th>
+                                <th style="padding: 1rem; text-align: center;">Disk</th>
+                                <th style="padding: 1rem; text-align: center;">Network</th>
+                                <th style="padding: 1rem; text-align: left;">Uptime</th>
+                                <th style="padding: 1rem; text-align: center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${computers.map(pc => `
+                                <tr style="border-bottom: 1px solid var(--border);">
+                                    <td style="padding: 0.75rem 1rem; font-weight: 500;">${pc.name}</td>
+                                    <td style="padding: 0.75rem 1rem;">
+                                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${pc.is_online ? 'var(--success)' : 'var(--danger)'}; margin-right: 0.5rem;"></span>
+                                        ${pc.is_online ? 'Online' : 'Offline'}
+                                    </td>
+                                    <td style="padding: 0.75rem 1rem; text-align: center; font-family: monospace; font-size: 0.8rem;">${serverAgentVersion && pc.agent_version && pc.agent_version !== serverAgentVersion ? `<button onclick="updateAgent('${pc.id}')" style="background: var(--warning); color: #000; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 0.8rem;" title="Click to update">${pc.agent_version} -&gt; ${serverAgentVersion}</button>` : (pc.agent_version || '-')}</td>
+                                    <td style="padding: 0.75rem 1rem; font-family: monospace; font-size: 0.85rem;">${pc.ip}</td>
+                                    <td style="padding: 0.75rem 1rem; text-align: center;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+                                            <div style="width: 60px; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
+                                                <div style="width: ${pc.cpu_percent}%; height: 100%; background: ${getProgressColor(pc.cpu_percent)};"></div>
+                                            </div>
+                                            <span style="font-size: 0.8rem;">${Math.round(pc.cpu_percent)}%</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 0.75rem 1rem; text-align: center;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+                                            <div style="width: 60px; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
+                                                <div style="width: ${pc.memory_percent}%; height: 100%; background: ${getProgressColor(pc.memory_percent)};"></div>
+                                            </div>
+                                            <span style="font-size: 0.8rem;">${Math.round(pc.memory_percent)}%</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 0.75rem 1rem; text-align: center;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+                                            <div style="width: 60px; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
+                                                <div style="width: ${pc.disk_percent}%; height: 100%; background: ${getProgressColor(pc.disk_percent)};"></div>
+                                            </div>
+                                            <span style="font-size: 0.8rem;">${Math.round(pc.disk_percent)}%</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 0.75rem 1rem; text-align: center; font-size: 0.8rem;">
+                                        ${pc.last_speed ? `
+                                            <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+                                                <span style="color: ${getSpeedColor(pc.last_speed.download)};">&#9660;${pc.last_speed.download}</span>
+                                                <span style="color: ${getSpeedColor(pc.last_speed.upload)};">&#9650;${pc.last_speed.upload || 0}</span>
+                                                <span style="padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.65rem; font-weight: 600; background: ${getResponsivenessColor(pc.last_speed.download)}; color: #000;">${getResponsivenessLabel(pc.last_speed.download)}</span>
+                                            </div>
+                                        ` : '<span style="color: var(--text-muted);">-</span>'}
+                                    </td>
+                                    <td style="padding: 0.75rem 1rem;">${pc.is_online ? formatUptime(pc.extra?.uptime_seconds) : formatLastSeen(pc.last_seen)}</td>
+                                    <td style="padding: 0.75rem 1rem; text-align: center;">
+                                        <button class="btn" onclick="closeModal('cluster-modal'); showDetails(computers.find(c => c.id === '${pc.id}'))">Open</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            document.getElementById('cluster-body').innerHTML = html;
+        }
+
+        function getProgressColor(value) {
+            if (value < 60) return 'var(--success)';
+            if (value < 85) return 'var(--warning)';
+            return 'var(--danger)';
+        }
+
+        // ============================================
+        // All Graphs - Historical view for all computers
+        // ============================================
+        function showAllGraphs() {
+            document.getElementById('graphs-modal').classList.add('active');
+            loadAllGraphs();
+        }
+
+        // Store Chart.js instances for cleanup
+        let chartInstances = {};
+
+        async function loadAllGraphs() {
+            const hours = document.getElementById('all-graphs-range')?.value || 24;
+            const container = document.getElementById('graphs-body');
+            container.innerHTML = '<p style="text-align: center; padding: 2rem;">Loading graphs...</p>';
+
+            // Destroy existing charts
+            Object.values(chartInstances).forEach(chart => chart.destroy());
+            chartInstances = {};
+
+            try {
+                // Load metrics for all computers
+                const allMetrics = await Promise.all(
+                    computers.map(async pc => {
+                        try {
+                            const res = await fetch(`/api/metrics/${pc.id}/history?hours=${hours}`, {
+                                headers: { 'Authorization': authHeader }
+                            });
+                            const data = await res.json();
+                            return { pc, metrics: data.metrics };
+                        } catch (e) {
+                            return { pc, metrics: [] };
+                        }
+                    })
+                );
+
+                // Filter computers that have data
+                const withData = allMetrics.filter(m => m.metrics.length > 0);
+
+                if (withData.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; padding: 2rem; color: var(--text-muted);">No historical data yet. Data is collected every heartbeat (1 min).</p>';
+                    return;
+                }
+
+                // Create HTML with canvas elements for Chart.js
+                container.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem;">
+                        <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 12px;">
+                            <h3 style="margin-bottom: 1rem; color: var(--accent);">CPU Usage</h3>
+                            <canvas id="chart-cpu" style="max-height: 250px;"></canvas>
+                        </div>
+                        <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 12px;">
+                            <h3 style="margin-bottom: 1rem; color: var(--success);">Memory Usage</h3>
+                            <canvas id="chart-memory" style="max-height: 250px;"></canvas>
+                        </div>
+                        <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 12px;">
+                            <h3 style="margin-bottom: 1rem; color: var(--warning);">Disk Usage</h3>
+                            <canvas id="chart-disk" style="max-height: 250px;"></canvas>
+                        </div>
+                        <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 12px;">
+                            <h3 style="margin-bottom: 1rem; color: #8b5cf6;">Speed Test History</h3>
+                            <canvas id="chart-speed" style="max-height: 250px;"></canvas>
+                        </div>
+                    </div>
+                    <h3 style="margin: 2rem 0 1rem;">Individual Computers</h3>
+                    <div id="individual-charts" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1rem;"></div>
+                `;
+
+                // Wait for DOM to update
+                await new Promise(r => setTimeout(r, 50));
+
+                const chartColors = ['#3b82f6', '#22c55e', '#eab308', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+                const isDark = !document.body.classList.contains('light-theme');
+                const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+                const textColor = isDark ? '#94a3b8' : '#64748b';
+
+                const chartOptions = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { labels: { color: textColor, usePointStyle: true, padding: 15 } },
+                        tooltip: {
+                            backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                            titleColor: isDark ? '#e2e8f0' : '#0f172a',
+                            bodyColor: isDark ? '#94a3b8' : '#475569',
+                            borderColor: isDark ? '#334155' : '#e2e8f0',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: gridColor }, ticks: { color: textColor, maxTicksLimit: 8 } },
+                        y: { grid: { color: gridColor }, ticks: { color: textColor }, min: 0, max: 100 }
+                    }
+                };
+
+                // Create CPU chart
+                const cpuDatasets = withData.map((d, i) => ({
+                    label: d.pc.name,
+                    data: d.metrics.map(m => ({ x: new Date(m.recorded_at), y: m.cpu_percent })),
+                    borderColor: chartColors[i % chartColors.length],
+                    backgroundColor: chartColors[i % chartColors.length] + '33',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }));
+                chartInstances.cpu = new Chart(document.getElementById('chart-cpu'), {
+                    type: 'line',
+                    data: { datasets: cpuDatasets },
+                    options: { ...chartOptions, scales: { ...chartOptions.scales, x: { ...chartOptions.scales.x, type: 'time', time: { unit: hours <= 6 ? 'minute' : 'hour' } } } }
+                });
+
+                // Create Memory chart
+                const memDatasets = withData.map((d, i) => ({
+                    label: d.pc.name,
+                    data: d.metrics.map(m => ({ x: new Date(m.recorded_at), y: m.memory_percent })),
+                    borderColor: chartColors[i % chartColors.length],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }));
+                chartInstances.memory = new Chart(document.getElementById('chart-memory'), {
+                    type: 'line',
+                    data: { datasets: memDatasets },
+                    options: { ...chartOptions, scales: { ...chartOptions.scales, x: { ...chartOptions.scales.x, type: 'time', time: { unit: hours <= 6 ? 'minute' : 'hour' } } } }
+                });
+
+                // Create Disk chart
+                const diskDatasets = withData.map((d, i) => ({
+                    label: d.pc.name,
+                    data: d.metrics.map(m => ({ x: new Date(m.recorded_at), y: m.disk_percent })),
+                    borderColor: chartColors[i % chartColors.length],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }));
+                chartInstances.disk = new Chart(document.getElementById('chart-disk'), {
+                    type: 'line',
+                    data: { datasets: diskDatasets },
+                    options: { ...chartOptions, scales: { ...chartOptions.scales, x: { ...chartOptions.scales.x, type: 'time', time: { unit: hours <= 6 ? 'minute' : 'hour' } } } }
+                });
+
+                // Load speed test history for chart - show both download and upload
+                const speedData = await Promise.all(withData.map(async d => {
+                    try {
+                        const res = await fetch(`/api/speedtest/${d.pc.id}/history`, { headers: { 'Authorization': authHeader } });
+                        const data = await res.json();
+                        return { pc: d.pc, tests: data.tests.slice(0, 20).reverse() };
+                    } catch (e) {
+                        return { pc: d.pc, tests: [] };
+                    }
+                }));
+
+                // Create separate datasets for download and upload speeds
+                const speedDatasets = [];
+                const speedTestNetworks = {}; // Store network names for tooltips
+                speedData.filter(d => d.tests.length > 0).forEach((d, i) => {
+                    const baseColor = chartColors[i % chartColors.length];
+                    // Store network names by timestamp for tooltip lookup
+                    d.tests.forEach(t => {
+                        speedTestNetworks[new Date(t.created_at).getTime()] = t.network_name || '';
+                    });
+                    // Download - solid line
+                    speedDatasets.push({
+                        label: `${d.pc.name} (Down)`,
+                        data: d.tests.map(t => ({ x: new Date(t.created_at), y: t.download_mbps, network: t.network_name || '' })),
+                        borderColor: baseColor,
+                        backgroundColor: baseColor + '33',
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 4,
+                        pointStyle: 'circle',
+                        borderWidth: 2.5
+                    });
+                    // Upload - dashed line, slightly lighter color
+                    speedDatasets.push({
+                        label: `${d.pc.name} (Up)`,
+                        data: d.tests.map(t => ({ x: new Date(t.created_at), y: t.upload_mbps || 0, network: t.network_name || '' })),
+                        borderColor: baseColor,
+                        backgroundColor: baseColor + '22',
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointStyle: 'triangle',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5]
+                    });
+                });
+
+                chartInstances.speed = new Chart(document.getElementById('chart-speed'), {
+                    type: 'line',
+                    data: { datasets: speedDatasets },
+                    options: {
+                        ...chartOptions,
+                        plugins: {
+                            ...chartOptions.plugins,
+                            legend: {
+                                ...chartOptions.plugins.legend,
+                                labels: {
+                                    ...chartOptions.plugins.legend.labels,
+                                    usePointStyle: true,
+                                    font: { size: 11 }
+                                }
+                            },
+                            tooltip: {
+                                ...chartOptions.plugins.tooltip,
+                                callbacks: {
+                                    label: function(context) {
+                                        const network = context.raw.network;
+                                        let label = `${context.dataset.label}: ${context.parsed.y} Mbps`;
+                                        if (network) {
+                                            label += ` (${network})`;
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            ...chartOptions.scales,
+                            x: { ...chartOptions.scales.x, type: 'time', time: { unit: 'day' } },
+                            y: { ...chartOptions.scales.y, max: undefined, title: { display: true, text: 'Mbps', color: textColor } }
+                        }
+                    }
+                });
+
+                // Individual computer charts
+                const indContainer = document.getElementById('individual-charts');
+                withData.forEach((d, idx) => {
+                    const div = document.createElement('div');
+                    div.style.cssText = 'background: var(--bg-primary); padding: 1rem; border-radius: 12px;';
+                    div.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <h4>${d.pc.name}</h4>
+                            <span style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: ${d.pc.is_online ? 'var(--success)' : 'var(--danger)'}; border-radius: 4px; color: white;">
+                                ${d.pc.is_online ? 'Online' : 'Offline'}
+                            </span>
+                        </div>
+                        <canvas id="chart-ind-${idx}" style="max-height: 150px;"></canvas>
+                    `;
+                    indContainer.appendChild(div);
+
+                    // Small delay then create chart
+                    setTimeout(() => {
+                        chartInstances['ind-' + idx] = new Chart(document.getElementById('chart-ind-' + idx), {
+                            type: 'line',
+                            data: {
+                                datasets: [
+                                    { label: 'CPU', data: d.metrics.map(m => ({ x: new Date(m.recorded_at), y: m.cpu_percent })), borderColor: '#3b82f6', fill: false, tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+                                    { label: 'Memory', data: d.metrics.map(m => ({ x: new Date(m.recorded_at), y: m.memory_percent })), borderColor: '#22c55e', fill: false, tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+                                    { label: 'Disk', data: d.metrics.map(m => ({ x: new Date(m.recorded_at), y: m.disk_percent })), borderColor: '#eab308', fill: false, tension: 0.3, pointRadius: 0, borderWidth: 1.5 }
+                                ]
+                            },
+                            options: { ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: true, labels: { ...chartOptions.plugins.legend.labels, boxWidth: 12, font: { size: 10 } } } }, scales: { ...chartOptions.scales, x: { ...chartOptions.scales.x, type: 'time', time: { unit: hours <= 6 ? 'minute' : 'hour' }, ticks: { ...chartOptions.scales.x.ticks, font: { size: 9 } } } } }
+                        });
+                    }, 100 + idx * 50);
+                });
+
+            } catch (e) {
+                container.innerHTML = '<p style="text-align: center; padding: 2rem; color: var(--danger);">Failed to load graphs</p>';
+                console.error('Graph error:', e);
+            }
+        }
+
+        function renderMultiComputerGraph(allData, field, defaultColor) {
+            // Find the max time range across all computers
+            const maxPoints = 50;
+            let html = '<div style="position: relative; height: 120px; background: var(--bg-secondary); border-radius: 8px; padding: 0.5rem; overflow: hidden;">';
+
+            allData.forEach(({ pc, metrics }, index) => {
+                if (metrics.length === 0) return;
+
+                const step = Math.max(1, Math.floor(metrics.length / maxPoints));
+                const sampled = metrics.filter((_, i) => i % step === 0);
+                const color = getComputerColor(index);
+
+                // Create SVG path
+                const width = 100;
+                const height = 100;
+                const points = sampled.map((m, i) => {
+                    const x = (i / (sampled.length - 1)) * width;
+                    const y = height - m[field];
+                    return `${x},${y}`;
+                }).join(' ');
+
+                html += `
+                    <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-opacity="0.8"/>
+                    </svg>
+                `;
+            });
+
+            // Y-axis labels
+            html += `
+                <div style="position: absolute; right: 5px; top: 5px; font-size: 0.65rem; color: var(--text-muted);">100%</div>
+                <div style="position: absolute; right: 5px; bottom: 5px; font-size: 0.65rem; color: var(--text-muted);">0%</div>
+            `;
+
+            html += '</div>';
+            return html;
+        }
+
+        function getComputerColor(index) {
+            const colors = ['#3b82f6', '#22c55e', '#eab308', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+            return colors[index % colors.length];
+        }
+
+
+        // ============================================
+        // Graphs
+        // ============================================
+        async function loadGraphs(computerId) {
+            const hours = document.getElementById('graph-range')?.value || 24;
+            try {
+                const res = await fetch(`/api/metrics/${computerId}/history?hours=${hours}`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+                const container = document.getElementById('graphs-container');
+
+                if (data.metrics.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No historical data yet. Data is collected every heartbeat.</p>';
+                    return;
+                }
+
+                // Simple line graph using CSS/HTML
+                const maxPoints = 50;
+                const step = Math.max(1, Math.floor(data.metrics.length / maxPoints));
+                const sampled = data.metrics.filter((_, i) => i % step === 0);
+
+                container.innerHTML = `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="margin-bottom: 0.5rem; color: var(--accent);">CPU Usage</h4>
+                        <div style="display: flex; align-items: flex-end; height: 80px; gap: 2px; background: var(--bg-primary); padding: 0.5rem; border-radius: 6px;">
+                            ${sampled.map(m => `<div style="flex: 1; background: var(--accent); height: ${m.cpu_percent}%; border-radius: 2px;" title="${m.cpu_percent}% at ${new Date(m.recorded_at).toLocaleTimeString()}"></div>`).join('')}
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="margin-bottom: 0.5rem; color: var(--success);">Memory Usage</h4>
+                        <div style="display: flex; align-items: flex-end; height: 80px; gap: 2px; background: var(--bg-primary); padding: 0.5rem; border-radius: 6px;">
+                            ${sampled.map(m => `<div style="flex: 1; background: var(--success); height: ${m.memory_percent}%; border-radius: 2px;" title="${m.memory_percent}% at ${new Date(m.recorded_at).toLocaleTimeString()}"></div>`).join('')}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 style="margin-bottom: 0.5rem; color: var(--warning);">Disk Usage</h4>
+                        <div style="display: flex; align-items: flex-end; height: 80px; gap: 2px; background: var(--bg-primary); padding: 0.5rem; border-radius: 6px;">
+                            ${sampled.map(m => `<div style="flex: 1; background: var(--warning); height: ${m.disk_percent}%; border-radius: 2px;" title="${m.disk_percent}% at ${new Date(m.recorded_at).toLocaleTimeString()}"></div>`).join('')}
+                        </div>
+                    </div>
+                    <p style="text-align: center; color: var(--text-muted); font-size: 0.75rem; margin-top: 1rem;">
+                        ${sampled.length} data points | ${new Date(sampled[0]?.recorded_at).toLocaleString()} - ${new Date(sampled[sampled.length-1]?.recorded_at).toLocaleString()}
+                    </p>
+                `;
+            } catch (e) {
+                document.getElementById('graphs-container').innerHTML = '<p style="color: var(--danger);">Failed to load graphs</p>';
+            }
+        }
+
+        // ============================================
+        // Terminal
+        // ============================================
+        async function runCommand(computerId) {
+            const input = document.getElementById('terminal-input');
+            const output = document.getElementById('terminal-output');
+            const cmd = input.value.trim();
+            if (!cmd) return;
+
+            output.innerHTML += `<div style="color: #0f0;">$ ${cmd}</div>`;
+            output.innerHTML += `<div style="color: var(--text-muted);" id="cmd-status">Sending...</div>`;
+            input.value = '';
+            output.scrollTop = output.scrollHeight;
+
+            try {
+                const res = await fetch(`/api/exec/${computerId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: cmd })
+                });
+                const data = await res.json();
+
+                const statusEl = document.getElementById('cmd-status');
+                if (data.delivery === 'instant') {
+                    statusEl.textContent = 'Executing... (instant mode)';
+                    statusEl.style.color = 'var(--success)';
+                    // Poll for result quickly
+                    pollForResult(computerId, cmd, 0);
+                } else {
+                    statusEl.textContent = 'Queued (waiting for agent poll ~5s)';
+                    pollForResult(computerId, cmd, 0);
+                }
+            } catch (e) {
+                output.innerHTML += `<div style="color: var(--danger);">Failed to send command</div>`;
+            }
+        }
+
+        async function pollForResult(computerId, cmd, attempts) {
+            if (attempts > 20) return; // Stop after ~10 seconds
+
+            await new Promise(r => setTimeout(r, 500)); // Check every 500ms
+
+            try {
+                const res = await fetch(`/api/exec/${computerId}/history`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+
+                // Find our command's result
+                const result = data.results.find(r => r.command === cmd);
+                if (result) {
+                    const output = document.getElementById('terminal-output');
+                    const statusEl = document.getElementById('cmd-status');
+                    if (statusEl) statusEl.remove();
+
+                    output.innerHTML += `<div style="white-space: pre-wrap; color: ${result.exit_code === 0 ? '#ccc' : 'var(--danger)'};">${escapeHtml(result.output || '(no output)')}</div>`;
+                    output.scrollTop = output.scrollHeight;
+                    return;
+                }
+            } catch (e) {}
+
+            // Keep polling
+            pollForResult(computerId, cmd, attempts + 1);
+        }
+
+        async function loadCommandHistory(computerId) {
+            try {
+                const res = await fetch(`/api/exec/${computerId}/history`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+                const container = document.getElementById('command-history');
+
+                if (data.results.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-muted);">No command history yet.</p>';
+                    return;
+                }
+
+                // Also update terminal output with recent results
+                const output = document.getElementById('terminal-output');
+                const recent = data.results.slice(0, 5).reverse();
+                recent.forEach(r => {
+                    if (!r.command.startsWith('browse:') && !r.command.startsWith('download:')) {
+                        output.innerHTML += `<div style="color: #0f0; margin-top: 0.5rem;">$ ${r.command}</div>`;
+                        output.innerHTML += `<div style="white-space: pre-wrap; color: ${r.exit_code === 0 ? '#ccc' : 'var(--danger)'};">${escapeHtml(r.output || '(no output)')}</div>`;
+                    }
+                });
+                output.scrollTop = output.scrollHeight;
+
+                container.innerHTML = data.results.filter(r => !r.command.startsWith('browse:') && !r.command.startsWith('download:')).slice(0, 10).map(r => `
+                    <div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 6px; margin-bottom: 0.5rem; font-family: monospace; font-size: 0.8rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                            <span style="color: var(--accent);">$ ${escapeHtml(r.command)}</span>
+                            <span style="color: var(--text-muted); font-size: 0.7rem;">${new Date(r.created_at).toLocaleString()}</span>
+                        </div>
+                        <div style="color: ${r.exit_code === 0 ? 'var(--text-secondary)' : 'var(--danger)'}; white-space: pre-wrap; max-height: 100px; overflow-y: auto;">${escapeHtml(r.output?.substring(0, 500) || '(no output)')}${r.output?.length > 500 ? '...' : ''}</div>
+                    </div>
+                `).join('') || '<p style="color: var(--text-muted);">No shell commands yet.</p>';
+            } catch (e) {
+                document.getElementById('command-history').innerHTML = '<p style="color: var(--danger);">Failed to load history</p>';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================
+        // File Browser
+        // ============================================
+        async function browseFiles(computerId, path) {
+            const container = document.getElementById('file-browser');
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">Loading...</p>';
+
+            document.getElementById('file-path').value = path;
+
+            try {
+                const res = await fetch(`/api/files/${computerId}/browse`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                const data = await res.json();
+
+                if (data.delivery === 'instant') {
+                    container.innerHTML = '<p style="color: var(--success); text-align: center;">Loading... (instant mode)</p>';
+                }
+
+                // Poll for results quickly
+                pollForFileResults(computerId, path, 0);
+            } catch (e) {
+                container.innerHTML = '<p style="color: var(--danger);">Failed to request file list</p>';
+            }
+        }
+
+        async function pollForFileResults(computerId, requestedPath, attempts) {
+            if (attempts > 20) {
+                document.getElementById('file-browser').innerHTML = '<p style="color: var(--text-muted);">Timeout - try again</p>';
+                return;
+            }
+
+            await new Promise(r => setTimeout(r, 500)); // Check every 500ms
+
+            try {
+                const res = await fetch(`/api/exec/${computerId}/history`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+
+                // Find browse result for our path
+                const browseResult = data.results.find(r => r.command === `browse:${requestedPath}`);
+                if (browseResult) {
+                    if (browseResult.exit_code === 0) {
+                        const files = JSON.parse(browseResult.output);
+                        renderFileList(computerId, requestedPath, files);
+                    } else {
+                        document.getElementById('file-browser').innerHTML = `<p style="color: var(--danger);">${browseResult.output}</p>`;
+                    }
+                    return;
+                }
+            } catch (e) {}
+
+            // Keep polling
+            pollForFileResults(computerId, requestedPath, attempts + 1);
+        }
+
+        function renderFileList(computerId, currentPath, files) {
+            const container = document.getElementById('file-browser');
+            const escapedPath = currentPath ? currentPath.replace(/\\/g, '\\\\') : '';
+
+            container.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+                    <div style="color: var(--text-muted); font-size: 0.8rem; font-family: monospace;">
+                        ${currentPath || 'Drives'}
+                    </div>
+                    ${currentPath ? `<button class="btn" style="font-size: 0.75rem; padding: 4px 8px;" onclick="showUploadDialog('${computerId}', '${escapedPath}')">Upload File</button>` : ''}
+                </div>
+                ${currentPath ? `
+                    <div style="display: flex; align-items: center; padding: 0.5rem; cursor: pointer; border-radius: 4px;"
+                         onclick="browseFiles('${computerId}', '${getParentPath(currentPath).replace(/\\/g, '\\\\')}')"
+                         onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='transparent'">
+                        <span style="margin-right: 0.75rem;">&#128194;</span>
+                        <span style="flex: 1;">..</span>
+                    </div>` : ''}
+                ${files.map(f => {
+                    const fullPath = (currentPath ? currentPath + '\\' : '') + f.name;
+                    const escapedFullPath = fullPath.replace(/\\/g, '\\\\');
+                    const isDir = f.type === 'dir' || f.type === 'drive';
+                    return `
+                    <div style="display: flex; align-items: center; padding: 0.5rem; cursor: pointer; border-radius: 4px;"
+                         onclick="${isDir ? `browseFiles('${computerId}', '${escapedFullPath}')` : `downloadFile('${computerId}', '${escapedFullPath}')`}"
+                         onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='transparent'">
+                        <span style="margin-right: 0.75rem;">${isDir ? '&#128193;' : '&#128196;'}</span>
+                        <span style="flex: 1;">${f.name}</span>
+                        <span style="color: var(--text-muted); font-size: 0.8rem; margin-right: 0.5rem;">${f.type === 'file' ? formatFileSize(f.size) : ''}</span>
+                        ${!isDir ? `<span style="color: var(--accent); font-size: 0.8rem;" title="Click to download">&#8595;</span>` : ''}
+                    </div>`;
+                }).join('')}
+            `;
+        }
+
+        function showUploadDialog(computerId, currentPath) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                if (file.size > 100 * 1024 * 1024) {
+                    showNotification('File too large (max 100MB)');
+                    return;
+                }
+
+                showNotification(`Uploading ${file.name}...`);
+
+                try {
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                        const base64 = reader.result.split(',')[1];
+                        const remotePath = currentPath + '\\\\' + file.name;
+
+                        const res = await fetch(`/api/files/${computerId}/upload`, {
+                            method: 'POST',
+                            headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ path: remotePath, content: base64, filename: file.name })
+                        });
+
+                        if (res.ok) {
+                            showNotification(`Uploaded: ${file.name}`);
+                            // Refresh file list
+                            setTimeout(() => browseFiles(computerId, currentPath), 1000);
+                        } else {
+                            showNotification('Upload failed');
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                } catch (e) {
+                    showNotification('Upload failed: ' + e.message);
+                }
+            };
+            input.click();
+        }
+
+        function getParentPath(path) {
+            const parts = path.replace(/\\\\/g, '\\').split('\\').filter(p => p);
+            parts.pop();
+            return parts.length > 0 ? parts.join('\\') : '';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+            return (bytes / 1024 / 1024 / 1024).toFixed(1) + ' GB';
+        }
+
+        async function downloadFile(computerId, path) {
+            const fileName = path.split(/[/\\]/).pop();
+            showNotification(`Downloading ${fileName}...`);
+
+            try {
+                // Send download request
+                const res = await fetch(`/api/files/${computerId}/download`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                const data = await res.json();
+
+                if (data.delivery === 'instant') {
+                    // Poll for result
+                    pollForFileDownload(computerId, path, fileName, 0);
+                } else {
+                    showNotification('Download queued - waiting for agent...');
+                    pollForFileDownload(computerId, path, fileName, 0);
+                }
+            } catch (e) {
+                showNotification('Failed to request file download');
+            }
+        }
+
+        async function pollForFileDownload(computerId, path, fileName, attempts) {
+            if (attempts > 60) {
+                showNotification('Download timed out');
+                return;
+            }
+
+            await new Promise(r => setTimeout(r, 500));
+
+            try {
+                const res = await fetch(`/api/exec/${computerId}/history`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+
+                // Find our download result
+                const result = data.results.find(r => r.command === `download:${path}`);
+                if (result) {
+                    if (result.exit_code === 0) {
+                        // Decode base64 and trigger download
+                        try {
+                            const binaryString = atob(result.output);
+                            const bytes = new Uint8Array(binaryString.length);
+                            for (let i = 0; i < binaryString.length; i++) {
+                                bytes[i] = binaryString.charCodeAt(i);
+                            }
+                            const blob = new Blob([bytes]);
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = fileName;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            showNotification(`Downloaded: ${fileName}`);
+                        } catch (e) {
+                            showNotification('Failed to decode file');
+                        }
+                    } else {
+                        showNotification(`Download failed: ${result.output}`);
+                    }
+                    return;
+                }
+            } catch (e) {}
+
+            // Keep polling
+            pollForFileDownload(computerId, path, fileName, attempts + 1);
+        }
+
+        // ============================================
+        // Rename Computer
+        // ============================================
+        async function renameComputer(computerId) {
+            const name = document.getElementById('pc-name').value.trim();
+            if (!name) return alert('Name cannot be empty');
+
+            try {
+                await fetch(`/api/computers/${computerId}/rename`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                alert('Computer renamed!');
+                fetchComputers();
+            } catch (e) {
+                alert('Failed to rename');
+            }
+        }
+
+        async function showAllDiagnostics() {
+            document.getElementById('diagnostics-modal').classList.add('active');
+            const container = document.getElementById('all-diagnostics-body');
+            container.innerHTML = '<p style="text-align: center;">Loading...</p>';
+
+            try {
+                const res = await fetch('/api/diagnostics', {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+
+                if (data.logs.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                            <p>No diagnostic logs yet.</p>
+                            <p style="font-size: 0.85rem; margin-top: 0.5rem;">
+                                Logs are captured when CPU, Memory, or Disk exceeds thresholds set in Settings.
+                                <br>Current thresholds can be changed in the Settings menu.
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = data.logs.map(log => {
+                    const triggerLabel = {
+                        'high_cpu': 'High CPU',
+                        'high_memory': 'High Memory',
+                        'high_disk': 'High Disk'
+                    }[log.trigger_type] || log.trigger_type;
+
+                    const triggerColor = {
+                        'high_cpu': 'var(--danger)',
+                        'high_memory': 'var(--warning)',
+                        'high_disk': 'var(--accent)'
+                    }[log.trigger_type] || 'var(--text-muted)';
+
+                    return `
+                        <div style="background: var(--bg-primary); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid ${triggerColor};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <div>
+                                    <span style="font-weight: bold;">${log.computer_name || 'Unknown'}</span>
+                                    <span style="margin-left: 0.75rem; font-weight: bold; color: ${triggerColor};">${triggerLabel}</span>
+                                    <span style="margin-left: 0.5rem; font-size: 0.9rem;">${log.trigger_value}%</span>
+                                </div>
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(log.created_at).toLocaleString()}</span>
+                            </div>
+                            <div style="background: var(--bg-secondary); border-radius: 6px; padding: 0.5rem; max-height: 150px; overflow-y: auto;">
+                                <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid var(--border);">
+                                            <th style="text-align: left; padding: 0.25rem;">Process</th>
+                                            <th style="text-align: right; padding: 0.25rem; width: 60px;">CPU</th>
+                                            <th style="text-align: right; padding: 0.25rem; width: 60px;">RAM</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${log.processes.slice(0, 10).map(p => `
+                                            <tr style="border-bottom: 1px solid var(--border);">
+                                                <td style="padding: 0.25rem;">${p.name}</td>
+                                                <td style="text-align: right; padding: 0.25rem; color: ${p.cpu > 5 ? 'var(--danger)' : 'inherit'};">${p.cpu}%</td>
+                                                <td style="text-align: right; padding: 0.25rem; color: ${p.memory > 5 ? 'var(--warning)' : 'inherit'};">${p.memory}%</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                container.innerHTML = '<p style="color: var(--danger);">Failed to load diagnostic logs</p>';
+            }
+        }
+
+        async function loadDiagnosticLogs(computerId) {
+            try {
+                const res = await fetch(`/api/diagnostics/${computerId}`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+                const container = document.getElementById('diagnostic-logs');
+
+                if (data.logs.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                            <p>No diagnostic logs yet.</p>
+                            <p style="font-size: 0.85rem; margin-top: 0.5rem;">
+                                Logs are captured when CPU, Memory, or Disk exceeds thresholds set in Settings.
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = data.logs.map(log => {
+                    const triggerLabel = {
+                        'high_cpu': 'High CPU',
+                        'high_memory': 'High Memory',
+                        'high_disk': 'High Disk'
+                    }[log.trigger_type] || log.trigger_type;
+
+                    const triggerColor = {
+                        'high_cpu': 'var(--danger)',
+                        'high_memory': 'var(--warning)',
+                        'high_disk': 'var(--accent)'
+                    }[log.trigger_type] || 'var(--text-muted)';
+
+                    return `
+                        <div style="background: var(--bg-primary); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid ${triggerColor};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <div>
+                                    <span style="font-weight: bold; color: ${triggerColor};">${triggerLabel}</span>
+                                    <span style="margin-left: 0.5rem; font-size: 0.9rem;">${log.trigger_value}% (threshold: ${log.threshold}%)</span>
+                                </div>
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(log.created_at).toLocaleString()}</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Processes running at the time:</div>
+                            <div style="background: var(--bg-secondary); border-radius: 6px; padding: 0.5rem; max-height: 200px; overflow-y: auto;">
+                                <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid var(--border);">
+                                            <th style="text-align: left; padding: 0.25rem;">Process</th>
+                                            <th style="text-align: right; padding: 0.25rem; width: 60px;">CPU</th>
+                                            <th style="text-align: right; padding: 0.25rem; width: 60px;">RAM</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${log.processes.map(p => `
+                                            <tr style="border-bottom: 1px solid var(--border);">
+                                                <td style="padding: 0.25rem;">${p.name}</td>
+                                                <td style="text-align: right; padding: 0.25rem; color: ${p.cpu > 10 ? 'var(--danger)' : 'inherit'};">${p.cpu}%</td>
+                                                <td style="text-align: right; padding: 0.25rem; color: ${p.memory > 10 ? 'var(--warning)' : 'inherit'};">${p.memory}%</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                document.getElementById('diagnostic-logs').innerHTML = '<p style="color: var(--danger);">Failed to load diagnostic logs</p>';
+            }
+        }
+
+        async function loadSpeedTestHistory(computerId) {
+            try {
+                const res = await fetch(`/api/speedtest/${computerId}/history`, {
+                    headers: { 'Authorization': authHeader }
+                });
+                const data = await res.json();
+                const container = document.getElementById('speedtest-history');
+
+                if (data.tests.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">No speed tests yet. Click the button above to run one!</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${data.tests.map(t => `
+                            <div style="background: var(--bg-primary); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 4px solid ${getSpeedColor(t.download_mbps)};">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <div>
+                                        <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(t.created_at).toLocaleString()}</span>
+                                        ${t.network_name ? `<span style="font-size: 0.7rem; color: var(--accent); margin-left: 0.5rem;">[${t.network_name}]</span>` : ''}
+                                    </div>
+                                    <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: ${getSpeedColor(t.download_mbps)}; color: #000;">${getSpeedRating(t.download_mbps)}</span>
+                                </div>
+                                <div style="display: flex; gap: 2rem;">
+                                    <div style="flex: 1; text-align: center; padding: 0.5rem; background: var(--bg-secondary); border-radius: 6px;">
+                                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.25rem;">DOWNLOAD</div>
+                                        <div style="font-size: 1.25rem; font-weight: bold; color: ${getSpeedColor(t.download_mbps)};">${t.download_mbps}</div>
+                                        <div style="font-size: 0.7rem; color: var(--text-muted);">Mbps</div>
+                                    </div>
+                                    <div style="flex: 1; text-align: center; padding: 0.5rem; background: var(--bg-secondary); border-radius: 6px;">
+                                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.25rem;">UPLOAD</div>
+                                        <div style="font-size: 1.25rem; font-weight: bold; color: ${getSpeedColor(t.upload_mbps || 0)};">${t.upload_mbps || '-'}</div>
+                                        <div style="font-size: 0.7rem; color: var(--text-muted);">Mbps</div>
+                                    </div>
+                                </div>
+                                <div style="text-align: center; margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-muted);">
+                                    Test duration: ${t.test_time_sec}s
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (e) {
+                document.getElementById('speedtest-history').innerHTML = '<p style="color: var(--text-muted);">Failed to load history</p>';
+            }
+        }
+
+        async function fetchAlerts() {
+            try {
+                const res = await fetch('/api/alerts', { headers: { 'Authorization': authHeader } });
+                const data = await res.json();
+                alerts = data.alerts;
+                const btn = document.getElementById('alerts-btn');
+                document.getElementById('alerts-count').textContent = alerts.length;
+                btn.classList.toggle('has-alerts', alerts.length > 0);
+            } catch (e) {}
+        }
+
+        function renderComputers() {
+            const container = document.getElementById('groups-container');
+
+            if (computers.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h2>No computers yet</h2><p>Install the agent on your computers to start monitoring.</p></div>';
+                return;
+            }
+
+            // Group computers
+            const groups = {};
+            computers.forEach(pc => {
+                const g = pc.group_name || 'Ungrouped';
+                if (!groups[g]) groups[g] = [];
+                groups[g].push(pc);
+            });
+
+            // Sort groups, Ungrouped last
+            const sortedGroups = Object.keys(groups).sort((a, b) => {
+                if (a === 'Ungrouped') return 1;
+                if (b === 'Ungrouped') return -1;
+                return a.localeCompare(b);
+            });
+
+            container.innerHTML = sortedGroups.map(groupName => {
+                const pcs = groups[groupName].sort((a, b) => {
+                    if (a.is_online !== b.is_online) return b.is_online - a.is_online;
+                    return a.name.localeCompare(b.name);
+                });
+
+                return `
+                    <div class="group">
+                        <div class="group-header">
+                            <span class="group-name">${groupName}</span>
+                            <span class="group-count">${pcs.length}</span>
+                        </div>
+                        <div class="grid">
+                            ${pcs.map(pc => `
+                                <div class="card">
+                                    <div class="card-header">
+                                        <span class="computer-name">${pc.name}${getSignalIcon(pc.extra?.wifi_signal)}</span>
+                                        <span class="status-badge ${pc.is_online ? 'status-online' : 'status-offline'}">
+                                            ${pc.is_online ? 'Online' : 'Offline'}
+                                        </span>
+                                    </div>
+                                    <div class="info-grid">
+                                        <div class="info-item"><span class="info-label">IP</span><span>${pc.ip}</span></div>
+                                        <div class="info-item"><span class="info-label">${pc.is_online ? 'Uptime' : 'Last seen'}</span><span>${pc.is_online ? formatUptime(pc.extra?.uptime_seconds) : formatLastSeen(pc.last_seen)}</span></div>
+                                    </div>
+                                    <div class="metrics">
+                                        <div class="metric">
+                                            <div class="metric-value">${Math.round(pc.cpu_percent)}%</div>
+                                            <div class="metric-label">CPU</div>
+                                            <div class="progress-bar"><div class="progress-fill ${getProgressClass(pc.cpu_percent)}" style="width: ${pc.cpu_percent}%"></div></div>
+                                        </div>
+                                        <div class="metric">
+                                            <div class="metric-value">${Math.round(pc.memory_percent)}%</div>
+                                            <div class="metric-label">RAM</div>
+                                            <div class="progress-bar"><div class="progress-fill ${getProgressClass(pc.memory_percent)}" style="width: ${pc.memory_percent}%"></div></div>
+                                        </div>
+                                        <div class="metric">
+                                            <div class="metric-value">${Math.round(pc.disk_percent)}%</div>
+                                            <div class="metric-label">Disk</div>
+                                            <div class="progress-bar"><div class="progress-fill ${getProgressClass(pc.disk_percent)}" style="width: ${pc.disk_percent}%"></div></div>
+                                        </div>
+                                    </div>
+                                    ${pc.notes ? `<div class="notes">${pc.notes}</div>` : ''}
+                                    <div class="card-actions">
+                                        <button class="btn btn-primary" onclick='showDetails(${JSON.stringify(pc).replace(/'/g, "\\'")})'>Details</button>
+                                        ${pc.last_speed ? `<span style="display: flex; align-items: center; gap: 0.3rem; padding: 0.25rem 0.5rem; background: var(--bg-primary); border-radius: 4px; font-size: 0.7rem;"><span style="color: ${getSpeedColor(pc.last_speed.download)};">&#9660;${pc.last_speed.download}</span><span style="color: ${getSpeedColor(pc.last_speed.upload)};">&#9650;${pc.last_speed.upload || 0}</span><span style="padding: 0.1rem 0.25rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; background: ${getResponsivenessColor(pc.last_speed.download)}; color: #000;">${getResponsivenessLabel(pc.last_speed.download)}</span></span>` : ''}
+                                        ${pc.extra?.rustdesk_id ? `<button class="btn" onclick="connectRustDesk('${pc.id}')" ${!pc.is_online ? 'disabled' : ''} title="${pc.extra?.rustdesk_password ? 'One-click connect (password saved)' : 'Connect to RustDesk'}">${pc.extra?.rustdesk_password ? 'Remote' : 'Remote'}</button>` : ''}
+                                        ${(pc.mac_address || pc.extra?.mac_address) && !pc.is_online ? `<button class="btn btn-success" onclick="wakeComputer('${pc.id}')">Wake</button>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('total-count').textContent = computers.length;
+            document.getElementById('online-count').textContent = computers.filter(c => c.is_online).length;
+            document.getElementById('offline-count').textContent = computers.filter(c => !c.is_online).length;
+        }
+
+        let serverAgentVersion = null;
+
+        async function fetchComputers() {
+            try {
+                const res = await fetch('/api/computers', { headers: { 'Authorization': authHeader } });
+                const data = await res.json();
+                computers = data.computers;
+                renderComputers();
+                checkForOutdatedAgents();
+            } catch (e) {
+                console.error('Failed to fetch:', e);
+            }
+        }
+
+        async function checkForOutdatedAgents() {
+            try {
+                // Fetch server version if we don't have it yet
+                if (!serverAgentVersion) {
+                    const res = await fetch('/api/agent/version', { headers: { 'Authorization': authHeader } });
+                    const data = await res.json();
+                    serverAgentVersion = data.version;
+                }
+
+                // Check if any online agents are outdated
+                const outdated = computers.filter(c =>
+                    c.is_online &&
+                    c.agent_version &&
+                    c.agent_version !== serverAgentVersion
+                );
+
+                const badge = document.getElementById('update-badge');
+                if (badge) {
+                    if (outdated.length > 0) {
+                        badge.style.display = 'inline';
+                        badge.textContent = outdated.length;
+                        badge.title = `${outdated.length} agent(s) need updating`;
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to check for updates:', e);
+            }
+        }
+
+        // Initial load
+        fetchComputers();
+        fetchAlerts();
+
+        // Auto refresh
+        setInterval(fetchComputers, 30000);
+        setInterval(fetchAlerts, 60000);
+
+        // Close modals on outside click
+        document.querySelectorAll('.modal').forEach(m => {
+            m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); });
+        });
+
+        // ============================================
+        // Map View with Leaflet
+        // ============================================
+        let map = null;
+        let mapMarkers = [];
+
+        async function showMapView() {
+            document.getElementById('map-modal').classList.add('active');
+
+            // Initialize map if not already done
+            setTimeout(async () => {
+                if (!map) {
+                    map = L.map('map-container').setView([39.8283, -98.5795], 4); // Center of US
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(map);
+                }
+
+                // Load locations
+                await loadMapLocations();
+            }, 100);
+        }
+
+        async function loadMapLocations() {
+            try {
+                const res = await fetch('/api/computers/locations', { headers: { 'Authorization': authHeader } });
+                const data = await res.json();
+
+                // Clear existing markers
+                mapMarkers.forEach(m => map.removeLayer(m));
+                mapMarkers = [];
+
+                let hasLocations = false;
+                const bounds = [];
+
+                data.locations.forEach(loc => {
+                    if (loc.latitude && loc.longitude && (loc.latitude !== 0 || loc.longitude !== 0)) {
+                        hasLocations = true;
+                        bounds.push([loc.latitude, loc.longitude]);
+
+                        const color = loc.is_online ? '#22c55e' : '#ef4444';
+                        const icon = L.divIcon({
+                            className: 'custom-marker',
+                            html: `<div style="background: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: bold;">${loc.is_online ? '&#10003;' : '&#10007;'}</div>`,
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
+                        });
+
+                        const marker = L.marker([loc.latitude, loc.longitude], { icon }).addTo(map);
+                        marker.bindPopup(`
+                            <div style="min-width: 200px;">
+                                <h4 style="margin: 0 0 0.5rem;">${loc.name}</h4>
+                                <p style="margin: 0; color: ${loc.is_online ? 'green' : 'red'};">${loc.is_online ? 'Online' : 'Offline'}</p>
+                                <p style="margin: 0.5rem 0; font-size: 0.9rem;">${loc.location_name || loc.ip}</p>
+                                <hr style="margin: 0.5rem 0;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; text-align: center;">
+                                    <div><small>CPU</small><br><strong>${Math.round(loc.cpu_percent)}%</strong></div>
+                                    <div><small>RAM</small><br><strong>${Math.round(loc.memory_percent)}%</strong></div>
+                                    <div><small>Disk</small><br><strong>${Math.round(loc.disk_percent)}%</strong></div>
+                                </div>
+                                <button onclick="geolocateComputer('${loc.id}')" style="width: 100%; margin-top: 0.5rem; padding: 0.3rem; cursor: pointer;">Update Location</button>
+                            </div>
+                        `);
+                        mapMarkers.push(marker);
+                    }
+                });
+
+                // Fit bounds if we have locations
+                if (hasLocations && bounds.length > 0) {
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+
+                // Show legend with computers that need location setup
+                const noLocation = data.locations.filter(l => !l.latitude && !l.longitude || (l.latitude === 0 && l.longitude === 0));
+                document.getElementById('map-legend').innerHTML = `
+                    <div style="display: flex; gap: 2rem; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="width: 16px; height: 16px; background: #22c55e; border-radius: 50%; display: inline-block;"></span>
+                            <span>Online</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="width: 16px; height: 16px; background: #ef4444; border-radius: 50%; display: inline-block;"></span>
+                            <span>Offline</span>
+                        </div>
+                    </div>
+                    ${noLocation.length > 0 ? `
+                    <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 8px;">
+                        <h4 style="margin-bottom: 0.5rem;">Computers without location (${noLocation.length})</h4>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            ${noLocation.map(c => `
+                                <button class="btn" onclick="geolocateComputer('${c.id}')">${c.name} - Auto-locate</button>
+                            `).join('')}
+                        </div>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Click to auto-detect location from IP address</p>
+                    </div>
+                    ` : ''}
+                `;
+
+            } catch (e) {
+                console.error('Failed to load map locations:', e);
+            }
+        }
+
+        async function geolocateComputer(computerId) {
+            try {
+                const res = await fetch(`/api/geolocate/${computerId}`, { headers: { 'Authorization': authHeader } });
+                if (res.ok) {
+                    const data = await res.json();
+                    // Save the location
+                    await fetch(`/api/computers/${computerId}/location`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    showNotification(`Location updated: ${data.location_name}`);
+                    loadMapLocations();
+                } else {
+                    showNotification('Could not determine location from IP');
+                }
+            } catch (e) {
+                showNotification('Failed to geolocate');
+            }
+        }
+
+        // ============================================
+        // Auto Speed Tests
+        // ============================================
+        let autoSpeedTestInterval = null;
+
+        async function checkAutoSpeedTests() {
+            try {
+                const res = await fetch('/api/speedtest/auto/status', { headers: { 'Authorization': authHeader } });
+                const data = await res.json();
+
+                if (data.enabled) {
+                    // Check if any computers need a test
+                    const needsTest = data.computers.filter(c => c.needs_test && c.is_online);
+                    if (needsTest.length > 0) {
+                        // Trigger auto speed tests
+                        const triggerRes = await fetch('/api/speedtest/auto/run', {
+                            method: 'POST',
+                            headers: { 'Authorization': authHeader }
+                        });
+                        const triggerData = await triggerRes.json();
+                        if (triggerData.count > 0) {
+                            showNotification(`Auto speed test started for ${triggerData.count} computer(s)`);
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Check auto speed tests every 5 minutes
+        setInterval(checkAutoSpeedTests, 5 * 60 * 1000);
+        // Also check on page load (after a short delay)
+        setTimeout(checkAutoSpeedTests, 10000);
+    </script>
+</body>
+</html>

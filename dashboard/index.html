@@ -2827,7 +2827,24 @@
                     return;
                 }
 
+                // Check if latest test used basic method (speedtest-cli not installed)
+                const latestTest = data.tests[0];
+                const needsSpeedtestCli = latestTest.method === 'basic' || !latestTest.method;
+
+                const installBanner = needsSpeedtestCli ? `
+                    <div style="background: linear-gradient(135deg, #f59e0b22, #f59e0b11); border: 1px solid #f59e0b44; border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+                        <div style="flex: 1;">
+                            <div style="font-size: 0.85rem; color: #f59e0b; font-weight: 500;">Basic Mode - Results may be less accurate</div>
+                            <div style="font-size: 0.7rem; color: var(--text-muted);">Install speedtest-cli for accurate speed tests</div>
+                        </div>
+                        <button onclick="installSpeedtestCli('${computerId}')" class="btn" style="background: #f59e0b; color: #000; padding: 0.5rem 1rem; font-size: 0.75rem; white-space: nowrap;" title="Runs: pip3 install speedtest-cli">
+                            Install speedtest-cli
+                        </button>
+                    </div>
+                ` : '';
+
                 container.innerHTML = `
+                    ${installBanner}
                     <div style="max-height: 300px; overflow-y: auto;">
                         ${data.tests.map(t => `
                             <div style="background: var(--bg-primary); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 4px solid ${getSpeedColor(t.download_mbps)};">
@@ -2835,6 +2852,7 @@
                                     <div>
                                         <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(t.created_at).toLocaleString()}</span>
                                         ${t.network_name ? `<span style="font-size: 0.7rem; color: var(--accent); margin-left: 0.5rem;">[${t.network_name}]</span>` : ''}
+                                        ${t.method === 'basic' || !t.method ? '<span style="font-size: 0.6rem; color: #f59e0b; margin-left: 0.5rem;">(basic)</span>' : ''}
                                     </div>
                                     <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: ${getSpeedColor(t.download_mbps)}; color: #000;">${getSpeedRating(t.download_mbps)}</span>
                                 </div>
@@ -2859,6 +2877,22 @@
                 `;
             } catch (e) {
                 document.getElementById('speedtest-history').innerHTML = '<p style="color: var(--text-muted);">Failed to load history</p>';
+            }
+        }
+
+        async function installSpeedtestCli(computerId) {
+            if (!confirm('This will run "pip3 install speedtest-cli" on the computer. Continue?')) return;
+
+            try {
+                const res = await fetch(`/api/exec/${computerId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: 'pip3 install speedtest-cli || pip install speedtest-cli' })
+                });
+                const data = await res.json();
+                showNotification('Installing speedtest-cli... Check command history for result.');
+            } catch (e) {
+                showNotification('Failed to send install command', 'error');
             }
         }
 

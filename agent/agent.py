@@ -5,7 +5,7 @@ Sends heartbeats with system info to the central server.
 Uses WebSockets for instant command response!
 """
 
-AGENT_VERSION = "1.4.4"  # Increment this when updating the agent
+AGENT_VERSION = "1.4.5"  # Increment this when updating the agent
 
 import platform
 import socket
@@ -318,7 +318,8 @@ def run_speed_test():
         "download_mbps": 0,
         "upload_mbps": 0,
         "test_time_sec": 0,
-        "network_name": network_name
+        "network_name": network_name,
+        "method": "basic"  # Will be updated to "speedtest-cli" if successful
     }
 
     # Try speedtest-cli first (accurate results)
@@ -342,6 +343,7 @@ def run_speed_test():
         print(f"    Upload: {result['upload_mbps']} Mbps")
 
         result["test_time_sec"] = round(time.time() - start_time, 2)
+        result["method"] = "speedtest-cli"  # Mark as accurate
 
         # Add server info to network name
         server = st.results.server

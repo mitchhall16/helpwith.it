@@ -362,11 +362,13 @@ def init_db():
             upload_mbps REAL,
             test_time_sec REAL,
             network_name TEXT DEFAULT '',
+            method TEXT DEFAULT 'basic',
             created_at TEXT
         )
     """)
-    # Auto-add network_name column if missing (for existing databases)
+    # Auto-add columns if missing (for existing databases)
     add_column_if_missing("speed_tests", "network_name", "TEXT", "''")
+    add_column_if_missing("speed_tests", "method", "TEXT", "'basic'")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pending_commands (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -888,8 +890,8 @@ async def submit_speedtest_result(computer_id: str, request: Request):
     data = await request.json()
     conn = sqlite3.connect(DB_PATH)
     conn.execute(
-        "INSERT INTO speed_tests (computer_id, download_mbps, upload_mbps, test_time_sec, network_name, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (computer_id, data.get("download_mbps"), data.get("upload_mbps", 0), data.get("test_time_sec"), data.get("network_name", ""), datetime.now().isoformat())
+        "INSERT INTO speed_tests (computer_id, download_mbps, upload_mbps, test_time_sec, network_name, method, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (computer_id, data.get("download_mbps"), data.get("upload_mbps", 0), data.get("test_time_sec"), data.get("network_name", ""), data.get("method", "basic"), datetime.now().isoformat())
     )
     conn.commit()
     conn.close()
@@ -1332,12 +1334,12 @@ async def websocket_endpoint(websocket: WebSocket, computer_id: str):
                 try:
                     conn = sqlite3.connect(DB_PATH)
                     conn.execute(
-                        "INSERT INTO speed_tests (computer_id, download_mbps, upload_mbps, test_time_sec, network_name, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                        (computer_id, data.get("download_mbps"), data.get("upload_mbps", 0), data.get("test_time_sec"), data.get("network_name", ""), datetime.now().isoformat())
+                        "INSERT INTO speed_tests (computer_id, download_mbps, upload_mbps, test_time_sec, network_name, method, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (computer_id, data.get("download_mbps"), data.get("upload_mbps", 0), data.get("test_time_sec"), data.get("network_name", ""), data.get("method", "basic"), datetime.now().isoformat())
                     )
                     conn.commit()
                     conn.close()
-                    print(f"[Speedtest] Stored result for {computer_id}: {data.get('download_mbps')} Mbps down, {data.get('upload_mbps')} Mbps up")
+                    print(f"[Speedtest] Stored result for {computer_id}: {data.get('download_mbps')} Mbps down, {data.get('upload_mbps')} Mbps up (method: {data.get('method', 'basic')})")
                 except Exception as e:
                     print(f"[Speedtest] ERROR storing result for {computer_id}: {e}")
 

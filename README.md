@@ -8,40 +8,39 @@
 
 ```mermaid
 flowchart LR
-    subgraph Browser[Your Browser]
-        Dashboard[Dashboard]
+    You[You] --> Dashboard
+
+    subgraph Dashboard[Dashboard]
+        direction TB
+        Stats[View Stats]
+        Term[Run Commands]
+        Files[Upload/Download Files]
+        Remote[RustDesk Remote]
+        Speed[Speed Tests]
+        Wake[Wake-on-LAN]
     end
 
-    subgraph Server[Server]
-        API[FastAPI + WebSocket]
-        DB[(SQLite)]
-        API --- DB
-    end
-
-    subgraph Computers[Your Computers]
+    subgraph Agents[Computers with Agent]
         PC1[Windows PC]
         PC2[Linux Server]
         PC3[MacBook]
     end
 
-    Dashboard <--> API
-    API <--> PC1
-    API <--> PC2
-    API <--> PC3
-    Dashboard -.-> PC1
-    Dashboard -.-> PC2
-    Dashboard -.-> PC3
+    Dashboard <-->|All Features| PC1
+    Dashboard <-->|All Features| PC2
+    Dashboard <-->|All Features| PC3
 ```
 
-| Connection | Description |
-|------------|-------------|
-| Solid lines | Stats, commands, file browsing via WebSocket |
-| Dotted lines | Remote desktop via RustDesk (click "Remote") |
+**From the dashboard you can do all of this to any computer:**
 
-**How it works:**
-1. **Agents** run on each computer, sending stats every 60s via WebSocket
-2. **Dashboard** shows all computers - click any to view details, run commands, browse files
-3. **Remote Desktop** - click "Remote" to instantly connect via RustDesk (peer-to-peer)
+| Feature | Description |
+|---------|-------------|
+| **Heartbeat** | Live CPU, RAM, disk stats every 60s |
+| **Terminal** | Run any command, see output instantly |
+| **File Browser** | Browse folders, upload files, download files |
+| **RustDesk** | One-click remote desktop control |
+| **Speed Test** | Test that PC's internet speed |
+| **Wake-on-LAN** | Power on a sleeping/off PC |
 
 ---
 

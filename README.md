@@ -8,32 +8,35 @@
 
 ```mermaid
 flowchart LR
-    subgraph You["Your Browser"]
-        Dashboard[📊 Dashboard]
+    subgraph Browser[Your Browser]
+        Dashboard[Dashboard]
     end
 
-    subgraph Server["Server"]
+    subgraph Server[Server]
         API[FastAPI + WebSocket]
         DB[(SQLite)]
-        API <--> DB
+        API --- DB
     end
 
-    subgraph Computers["Your Computers"]
-        PC1[🖥️ Windows PC<br/>Agent + RustDesk]
-        PC2[🐧 Linux Server<br/>Agent + RustDesk]
-        PC3[🍎 MacBook<br/>Agent + RustDesk]
+    subgraph Computers[Your Computers]
+        PC1[Windows PC]
+        PC2[Linux Server]
+        PC3[MacBook]
     end
 
-    Dashboard <-->|View Stats<br/>Run Commands<br/>Browse Files| API
-
-    API <-->|WebSocket| PC1
-    API <-->|WebSocket| PC2
-    API <-->|WebSocket| PC3
-
-    Dashboard -.->|Click "Remote"<br/>Opens RustDesk| PC1
-    Dashboard -.->|Click "Remote"<br/>Opens RustDesk| PC2
-    Dashboard -.->|Click "Remote"<br/>Opens RustDesk| PC3
+    Dashboard <--> API
+    API <--> PC1
+    API <--> PC2
+    API <--> PC3
+    Dashboard -.-> PC1
+    Dashboard -.-> PC2
+    Dashboard -.-> PC3
 ```
+
+| Connection | Description |
+|------------|-------------|
+| Solid lines | Stats, commands, file browsing via WebSocket |
+| Dotted lines | Remote desktop via RustDesk (click "Remote") |
 
 **How it works:**
 1. **Agents** run on each computer, sending stats every 60s via WebSocket
